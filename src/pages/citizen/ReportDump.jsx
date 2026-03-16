@@ -4,7 +4,7 @@ import { useToast } from '../../context/ToastContext';
 import api from '../../api/axios';
 import ListboxSelect from '../../components/ListboxSelect';
 import { getApiErrorMessage } from '../../utils/apiError';
-import { reverseGeocode } from '../../utils/geocode';
+import { extractPinCodeFromAddress, reverseGeocode } from '../../utils/geocode';
 
 const CATEGORIES = [
     'PLASTIC',
@@ -45,6 +45,11 @@ export default function ReportDump() {
 
         if (!imageFile) {
             addToast('Image is required by the backend for dump reports', 'error');
+            return;
+        }
+
+        if (!formData.pinCode) {
+            addToast('Unable to detect pincode from the address. Please include a valid postal code in the address.', 'error');
             return;
         }
 
@@ -115,7 +120,14 @@ export default function ReportDump() {
                                 className="input-field pl-10"
                                 required
                                 value={formData.address}
-                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                onChange={(e) => {
+                                    const address = e.target.value;
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        address,
+                                        pinCode: extractPinCodeFromAddress(address),
+                                    }));
+                                }}
                             />
                             <button
                                 type="button"
@@ -131,6 +143,7 @@ export default function ReportDump() {
                                                     setFormData((prev) => ({
                                                         ...prev,
                                                         address,
+                                                        pinCode: extractPinCodeFromAddress(address),
                                                         latitude,
                                                         longitude,
                                                     }));
@@ -194,7 +207,8 @@ export default function ReportDump() {
                                 required
                                 className="input-field"
                                 value={formData.pinCode}
-                                onChange={(e) => setFormData({ ...formData, pinCode: e.target.value })}
+                                readOnly
+                                placeholder="Auto-detected from address"
                             />
                         </div>
                     </div>

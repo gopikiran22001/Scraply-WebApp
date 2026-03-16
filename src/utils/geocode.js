@@ -25,3 +25,20 @@ export async function reverseGeocode(latitude, longitude) {
     const data = await response.json();
     return data?.display_name || '';
 }
+
+export function extractPinCodeFromAddress(address) {
+    const normalizedAddress = String(address || '');
+
+    // Prefer 6-digit postcodes, then fallback to 5-digit postcodes.
+    const sixDigitMatch = normalizedAddress.match(/\b(\d{6})\b/);
+    if (sixDigitMatch?.[1]) {
+        return sixDigitMatch[1];
+    }
+
+    const fiveDigitMatch = normalizedAddress.match(/\b(\d{5})\b/);
+    if (fiveDigitMatch?.[1]) {
+        return fiveDigitMatch[1];
+    }
+
+    return '';
+}

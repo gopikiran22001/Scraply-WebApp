@@ -5,7 +5,7 @@ import api from '../../api/axios';
 import { Upload, Trash2, MapPin, FileText } from 'lucide-react';
 import ListboxSelect from '../../components/ListboxSelect';
 import { getApiErrorMessage } from '../../utils/apiError';
-import { reverseGeocode } from '../../utils/geocode';
+import { extractPinCodeFromAddress, reverseGeocode } from '../../utils/geocode';
 
 const CATEGORIES = [
     'PLASTIC',
@@ -47,6 +47,11 @@ export default function RequestPickup() {
 
         if (!imageFile) {
             addToast('Image is required by the backend for pickup requests', 'error');
+            return;
+        }
+
+        if (!formData.pinCode) {
+            addToast('Unable to detect pincode from the address. Please include a valid postal code in the address.', 'error');
             return;
         }
 
@@ -98,7 +103,8 @@ export default function RequestPickup() {
                                 required
                                 className="input-field"
                                 value={formData.pinCode}
-                                onChange={(e) => setFormData({ ...formData, pinCode: e.target.value })}
+                                readOnly
+                                placeholder="Auto-detected from address"
                             />
                         </div>
                     </div>
@@ -128,7 +134,14 @@ export default function RequestPickup() {
                                 className="input-field pl-10"
                                 required
                                 value={formData.address}
-                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                onChange={(e) => {
+                                    const address = e.target.value;
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        address,
+                                        pinCode: extractPinCodeFromAddress(address),
+                                    }));
+                                }}
                             />
                             <button
                                 type="button"
@@ -144,6 +157,7 @@ export default function RequestPickup() {
                                                     setFormData((prev) => ({
                                                         ...prev,
                                                         address,
+                                                        pinCode: extractPinCodeFromAddress(address),
                                                         latitude,
                                                         longitude,
                                                     }));
