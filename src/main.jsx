@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { ToastProvider } from './context/ToastContext'
 import { AuthProvider } from './context/AuthContext'
 import ErrorBoundary from './components/ErrorBoundary'
+import 'leaflet/dist/leaflet.css'
 import './index.css'
 import App from './App.jsx'
 

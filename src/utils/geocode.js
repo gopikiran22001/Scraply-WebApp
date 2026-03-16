@@ -1,12 +1,18 @@
-const DEFAULT_GEOCODE_URL = 'https://nominatim.openstreetmap.org/reverse';
+const DEFAULT_REVERSE_GEOCODE_URL = 'https://nominatim.openstreetmap.org/reverse';
+const DEFAULT_SEARCH_GEOCODE_URL = 'https://nominatim.openstreetmap.org/search';
 
-function getGeocodeBaseUrl() {
+function getReverseGeocodeBaseUrl() {
     const configured = String(import.meta.env.VITE_GEOCODE_API_URL || '').trim();
-    return configured || DEFAULT_GEOCODE_URL;
+    return configured || DEFAULT_REVERSE_GEOCODE_URL;
+}
+
+function getSearchGeocodeBaseUrl() {
+    const configured = String(import.meta.env.VITE_GEOCODE_SEARCH_API_URL || '').trim();
+    return configured || DEFAULT_SEARCH_GEOCODE_URL;
 }
 
 export async function reverseGeocode(latitude, longitude) {
-    const baseUrl = getGeocodeBaseUrl();
+    const baseUrl = getReverseGeocodeBaseUrl();
     const url = new URL(baseUrl);
     url.searchParams.set('format', 'json');
     url.searchParams.set('lat', String(latitude));
@@ -24,6 +30,43 @@ export async function reverseGeocode(latitude, longitude) {
 
     const data = await response.json();
     return data?.display_name || '';
+}
+
+export async function searchAddress(query, limit = 5) {
+    const sanitizedQuery = String(query || '').trim();
+    if (!sanitizedQuery) {
+        return [];
+    }
+
+    const baseUrl = getSearchGeocodeBaseUrl();
+    const url = new URL(baseUrl);
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('q', sanitizedQuery);
+    url.searchParams.set('limit', String(limit));
+    url.searchParams.set('addressdetails', '1');
+
+    const response = await fetch(url.toString(), {
+        headers: {
+            Accept: 'application/json',
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`Address search failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data)) {
+        return [];
+    }
+
+    return data
+        .map((item) => ({
+            address: item?.display_name || '',
+            latitude: Number(item?.lat),
+            longitude: Number(item?.lon),
+        }))
+        .filter((item) => item.address && Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
 }
 
 export function extractPinCodeFromAddress(address) {
