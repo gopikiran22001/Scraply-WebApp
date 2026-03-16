@@ -11,10 +11,18 @@ const api = axios.create({
     timeout: 10000
 });
 
+const AUTH_TOKEN_KEY = 'scraply_auth_token';
+
 // Request interceptor
 api.interceptors.request.use(
     (config) => {
-        // You can add auth headers here if needed
+        const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+        if (token) {
+            config.headers = config.headers || {};
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+
         return config;
     },
     (error) => {
@@ -29,6 +37,7 @@ api.interceptors.response.use(
     },
     (error) => {
         if (error.response?.status === 401) {
+            localStorage.removeItem(AUTH_TOKEN_KEY);
             console.warn('Unauthorized API request. Session may be expired.');
         }
         return Promise.reject(error);

@@ -6,6 +6,7 @@ import { getApiErrorMessage } from '../utils/apiError';
 import { useToast } from './ToastContext';
 
 const AuthContext = createContext();
+const AUTH_TOKEN_KEY = 'scraply_auth_token';
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
@@ -47,9 +48,13 @@ export const AuthProvider = ({ children }) => {
         try {
             const { data } = await api.post('/auth/login', { email, password }, {
                 headers: {
-                    'X-Platform': 'WEB'
+                    'X-Platform': 'MOBILE'
                 }
             });
+
+            if (data?.token) {
+                localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+            }
 
             const loggedInUser = {
                 ...data,
@@ -61,6 +66,7 @@ export const AuthProvider = ({ children }) => {
 
             return { success: true };
         } catch (error) {
+            localStorage.removeItem(AUTH_TOKEN_KEY);
             return {
                 success: false,
                 message: getApiErrorMessage(error, 'Login failed')
@@ -92,6 +98,7 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             addToast(getApiErrorMessage(error, 'Failed to notify server during logout'), 'error');
         } finally {
+            localStorage.removeItem(AUTH_TOKEN_KEY);
             setUser(null);
             navigate('/login');
         }
