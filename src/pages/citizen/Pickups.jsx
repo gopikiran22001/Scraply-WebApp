@@ -1,29 +1,81 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../api/axios';
-import { Clock, CheckCircle, Calendar, XCircle, Package, User } from 'lucide-react';
+import { Clock, CheckCircle, Calendar, XCircle, Package, User, AlertTriangle, MapPin } from 'lucide-react';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { useToast } from '../../context/ToastContext';
+import ListboxSelect from '../../components/ListboxSelect';
+
+const REQUEST_TYPE_OPTIONS = [
+    { value: 'ALL', label: 'All Requests' },
+    { value: 'PICKUP', label: 'Pickups' },
+    { value: 'DUMP', label: 'Dump Reports' },
+];
+
+const STATUS_FILTER_OPTIONS = [
+    { value: 'ALL', label: 'All Statuses' },
+    { value: 'REQUESTED', label: 'Requested' },
+    { value: 'ASSIGNED', label: 'Assigned' },
+    { value: 'IN_PROGRESS', label: 'In Progress' },
+    { value: 'COMPLETED', label: 'Completed' },
+    { value: 'CANCELLED', label: 'Cancelled' },
+];
 
 export default function Pickups() {
     const { addToast } = useToast();
-    const [pickups, setPickups] = useState([]);
+    const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [requestTypeFilter, setRequestTypeFilter] = useState('ALL');
+    const [statusFilter, setStatusFilter] = useState('ALL');
 
     useEffect(() => {
-        const fetchPickups = async () => {
+        const fetchRequests = async () => {
             try {
-                const { data } = await api.get('/pickups/');
-                setPickups(Array.isArray(data) ? data : []);
+                const [{ data: pickupData }, { data: dumpData }] = await Promise.all([
+                    api.get('/pickups/'),
+                    api.get('/illegals/'),
+                ]);
+
+                const normalizedPickups = (Array.isArray(pickupData) ? pickupData : []).map((pickup) => ({
+                    ...pickup,
+                    requestType: 'PICKUP',
+                    requestLabel: 'Pickup',
+                    requestDate: pickup.requestedAt || null,
+                    assignee: pickup.pickerName || 'Not assigned yet',
+                }));
+
+                const normalizedDumps = (Array.isArray(dumpData) ? dumpData : []).map((report) => ({
+                    ...report,
+                    requestType: 'DUMP',
+                    requestLabel: 'Dump Report',
+                    requestDate: report.reportedAt || report.requestedAt || null,
+                    assignee: report.pickerName || 'Not assigned yet',
+                }));
+
+                const mergedRequests = [...normalizedPickups, ...normalizedDumps].sort((left, right) => {
+                    const leftDate = left.requestDate ? new Date(left.requestDate).getTime() : 0;
+                    const rightDate = right.requestDate ? new Date(right.requestDate).getTime() : 0;
+                    return rightDate - leftDate;
+                });
+
+                setRequests(mergedRequests);
             } catch (error) {
-                addToast(getApiErrorMessage(error, 'Error fetching pickups'), 'error');
-                setPickups([]);
+                addToast(getApiErrorMessage(error, 'Error fetching requests'), 'error');
+                setRequests([]);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchPickups();
+        fetchRequests();
     }, [addToast]);
+
+    const filteredRequests = useMemo(() => {
+        return requests.filter((request) => {
+            const matchesType = requestTypeFilter === 'ALL' || request.requestType === requestTypeFilter;
+            const matchesStatus = statusFilter === 'ALL' || String(request.status || '').toUpperCase() === statusFilter;
+            return matchesType && matchesStatus;
+        });
+    }, [requests, requestTypeFilter, statusFilter]);
 
     const getStatusColor = (status) => {
         switch (String(status || '').toUpperCase()) {
@@ -44,50 +96,87 @@ export default function Pickups() {
         }
     };
 
+    const getRequestTypeBadge = (requestType) => {
+        if (requestType === 'DUMP') {
+            return 'bg-orange-100 text-orange-700';
+        }
+
+        return 'bg-blue-100 text-blue-700';
+    };
+
     if (loading) {
         return <div className="text-center py-12">Loading...</div>;
     }
 
     return (
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <h1 className="text-2xl font-bold text-gray-900 mb-6">My Pickups</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-6">My Requests</h1>
+
+            <div className="grid gap-4 md:grid-cols-2 mb-6">
+                <ListboxSelect
+                    label="Request Type"
+                    value={requestTypeFilter}
+                    onChange={setRequestTypeFilter}
+                    options={REQUEST_TYPE_OPTIONS}
+                />
+                <ListboxSelect
+                    label="Status"
+                    value={statusFilter}
+                    onChange={setStatusFilter}
+                    options={STATUS_FILTER_OPTIONS}
+                />
+            </div>
 
             <div className="space-y-4">
-                {pickups.length === 0 ? (
+                {filteredRequests.length === 0 ? (
                     <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
-                        <p className="text-gray-500">No pickups scheduled yet.</p>
+                        <p className="text-gray-500">No requests match the selected filters.</p>
                     </div>
                 ) : (
-                    pickups.map((pickup) => (
-                        <div key={pickup.id} className="card p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    filteredRequests.map((request) => (
+                        <div key={`${request.requestType}-${request.id}`} className="card p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-4 w-full sm:w-auto">
-                                <div className={`p-3 rounded-full ${getStatusColor(pickup.status)} bg-opacity-20`}>
-                                    {getStatusIcon(pickup.status)}
+                                <div className={`p-3 rounded-full ${getStatusColor(request.status)} bg-opacity-20`}>
+                                    {getStatusIcon(request.status)}
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-gray-900">{pickup.category}</h3>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <h3 className="font-bold text-gray-900">{request.category}</h3>
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRequestTypeBadge(request.requestType)}`}>
+                                            {request.requestLabel}
+                                        </span>
+                                    </div>
                                     <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                                        <Package className="h-4 w-4" />
-                                        <span>{pickup.description}</span>
+                                        {request.requestType === 'DUMP' ? <AlertTriangle className="h-4 w-4" /> : <Package className="h-4 w-4" />}
+                                        <span>{request.description}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                                        <MapPin className="h-4 w-4" />
+                                        <span>{request.address}</span>
                                     </div>
                                     <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
                                         <Calendar className="h-4 w-4" />
-                                        <span>{pickup.requestedAt ? new Date(pickup.requestedAt).toLocaleString() : 'N/A'}</span>
+                                        <span>{request.requestDate ? new Date(request.requestDate).toLocaleString() : 'N/A'}</span>
                                     </div>
                                     <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
                                         <User className="h-4 w-4" />
-                                        <span>{pickup.pickerName || 'Not assigned yet'}</span>
+                                        <span>{request.assignee}</span>
                                     </div>
-                                    {pickup.imageUrl && (
+                                    {request.requestType === 'DUMP' && request.landmark ? (
+                                        <div className="mt-1 text-sm text-gray-500">
+                                            Landmark: {request.landmark}
+                                        </div>
+                                    ) : null}
+                                    {request.imageUrl && (
                                         <div className="mt-2">
-                                            <img src={pickup.imageUrl} alt="Pickup" className="h-16 w-16 object-cover rounded-md border border-gray-200" />
+                                            <img src={request.imageUrl} alt={request.requestLabel} className="h-16 w-16 object-cover rounded-md border border-gray-200" />
                                         </div>
                                     )}
                                 </div>
                             </div>
 
-                            <div className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(pickup.status)}`}>
-                                {String(pickup.status || '').replace('_', ' ')}
+                            <div className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
+                                {String(request.status || '').replace('_', ' ')}
                             </div>
                         </div>
                     ))

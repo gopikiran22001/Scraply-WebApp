@@ -17,6 +17,7 @@ export async function reverseGeocode(latitude, longitude) {
     url.searchParams.set('format', 'json');
     url.searchParams.set('lat', String(latitude));
     url.searchParams.set('lon', String(longitude));
+    url.searchParams.set('addressdetails', '1');
 
     const response = await fetch(url.toString(), {
         headers: {
@@ -30,6 +31,41 @@ export async function reverseGeocode(latitude, longitude) {
 
     const data = await response.json();
     return data?.display_name || '';
+}
+
+export async function reverseGeocodeWithPostcode(latitude, longitude) {
+    const baseUrl = getReverseGeocodeBaseUrl();
+    const url = new URL(baseUrl);
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('lat', String(latitude));
+    url.searchParams.set('lon', String(longitude));
+    url.searchParams.set('addressdetails', '1');
+    url.searchParams.set('zoom', '18');
+
+    const response = await fetch(url.toString(), {
+        headers: {
+            Accept: 'application/json',
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`Geocoding failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Try multiple ways to get postcode
+    let postcode = data?.address?.postcode;
+    
+    // If not found, try to extract from display name
+    if (!postcode) {
+        postcode = extractPinCodeFromAddress(data?.display_name || '');
+    }
+    
+    return {
+        address: data?.display_name || '',
+        postcode: postcode || ''
+    };
 }
 
 export async function searchAddress(query, limit = 5) {

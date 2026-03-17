@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './layouts/Layout';
 import Home from './pages/Home';
 import Awareness from './pages/Awareness';
@@ -14,13 +14,13 @@ import ProtectedRoute from './components/ProtectedRoute';
 import CitizenDashboard from './pages/citizen/Dashboard';
 import RequestPickup from './pages/citizen/RequestPickup';
 import Pickups from './pages/citizen/Pickups';
-import ReportDump from './pages/citizen/ReportDump';
 import Centres from './pages/citizen/Centres';
 import Points from './pages/citizen/Points';
 
 // Collector Pages
 import CollectorDashboard from './pages/collector/Dashboard';
 import CollectorRoute from './pages/collector/Route';
+import CollectorMapView from './pages/collector/MapView';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
@@ -56,6 +56,11 @@ function App() {
             } />
             <Route path="request-pickup" element={
               <ProtectedRoute roles={['USER', 'ADMIN']}>
+                <Navigate to="/citizen/request?type=pickup" replace />
+              </ProtectedRoute>
+            } />
+            <Route path="request" element={
+              <ProtectedRoute roles={['USER', 'ADMIN']}>
                 <RequestPickup />
               </ProtectedRoute>
             } />
@@ -66,7 +71,7 @@ function App() {
             } />
             <Route path="report-dump" element={
               <ProtectedRoute roles={['USER', 'ADMIN']}>
-                <ReportDump />
+                <Navigate to="/citizen/request?type=dump" replace />
               </ProtectedRoute>
             } />
             <Route path="centres" element={
@@ -86,6 +91,11 @@ function App() {
             <Route path="dashboard" element={
               <ProtectedRoute roles={['PICKER', 'ADMIN']}>
                 <CollectorDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="map" element={
+              <ProtectedRoute roles={['PICKER', 'ADMIN']}>
+                <CollectorMapView />
               </ProtectedRoute>
             } />
             <Route path="route/:id" element={

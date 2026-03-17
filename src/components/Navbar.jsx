@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Recycle, User, LogOut } from 'lucide-react';
+import { Recycle, User, LogOut, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
@@ -44,17 +44,14 @@ export default function Navbar() {
                         {isCitizen && (
                             <>
                                 <Link to="/citizen/dashboard" className={navLinkClass('/citizen/dashboard')}>Dashboard</Link>
-                                <Link to="/citizen/request-pickup" className={navLinkClass('/citizen/request-pickup')}>Request Pickup</Link>
-                                <Link to="/citizen/pickups" className={navLinkClass('/citizen/pickups')}>My Pickups</Link>
-                                <Link to="/citizen/report-dump" className={navLinkClass('/citizen/report-dump')}>Report Dump</Link>
-                                <Link to="/citizen/centres" className={navLinkClass('/citizen/centres')}>Centres</Link>
-                                <Link to="/citizen/points" className={navLinkClass('/citizen/points')}>Points</Link>
+                                <Link to="/citizen/request" className={navLinkClass('/citizen/request')}>Create Request</Link>
                             </>
                         )}
 
                         {isCollector && (
                             <>
                                 <Link to="/collector/dashboard" className={navLinkClass('/collector/dashboard')}>Dashboard</Link>
+                                <Link to="/collector/map" className={navLinkClass('/collector/map')}>Live Map</Link>
                             </>
                         )}
 
@@ -75,20 +72,27 @@ export default function Navbar() {
                                 <Link to="/register" className="btn btn-primary py-1.5 px-4 text-sm">Get Started</Link>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-3">
-                                <Link
-                                    to="/profile"
-                                    className={`p-2 rounded-full transition-colors ${location.pathname === '/profile'
-                                        ? 'text-primary-600 bg-primary-50'
-                                        : 'text-gray-500 hover:text-primary-600 hover:bg-gray-100'
-                                        }`}
-                                    title="Profile"
+                            <div className="relative group">
+                                <button
+                                    type="button"
+                                    className="flex items-center gap-2 p-2 rounded-full text-gray-600 hover:text-primary-600 hover:bg-gray-100 transition-colors"
+                                    title="Profile Menu"
                                 >
                                     <User className="h-5 w-5" />
-                                </Link>
-                                <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" title="Log Out">
-                                    <LogOut className="h-5 w-5" />
+                                    <ChevronDown className="h-4 w-4" />
                                 </button>
+
+                                <div className="absolute right-0 top-full pt-2 z-50 w-52 opacity-0 invisible translate-y-1 pointer-events-none transition-all duration-200 ease-out group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:pointer-events-auto">
+                                    <div className="rounded-lg border border-gray-200 bg-white shadow-lg py-1">
+                                        <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Profile</Link>
+                                        {isCitizen ? <Link to="/citizen/pickups" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">My Requests</Link> : null}
+                                        {isCitizen ? <Link to="/citizen/points" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Points</Link> : null}
+                                        <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                                            <LogOut className="h-4 w-4" />
+                                            Log Out
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
 

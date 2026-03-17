@@ -41,6 +41,99 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  .map-neo-shell {
+    @apply relative overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-b from-white via-slate-50 to-slate-100 p-3 sm:p-4;
+  }
+
+  .map-neo-backdrop {
+    position: absolute;
+    inset: -80px -80px auto;
+    height: 240px;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(56, 189, 248, 0.22) 0%, rgba(56, 189, 248, 0) 58%),
+      radial-gradient(circle at 80% 10%, rgba(251, 191, 36, 0.18) 0%, rgba(251, 191, 36, 0) 56%);
+    pointer-events: none;
+    animation: map-float 8s ease-in-out infinite alternate;
+  }
+
+  .map-neo-frame {
+    @apply relative overflow-hidden rounded-2xl border border-slate-200/80 shadow-[0_14px_30px_rgba(15,23,42,0.15)];
+  }
+
+  .map-tiles-style .leaflet-tile {
+    filter: saturate(1.08) contrast(1.03) brightness(1.02);
+  }
+
+  .map-fade-top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 76px;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.16) 0%, rgba(15, 23, 42, 0) 100%);
+    pointer-events: none;
+  }
+
+  .map-fade-bottom {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 88px;
+    background: linear-gradient(0deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+  }
+
+  .map-pulse-ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    transform: translate(-50%, -50%);
+    border: 2px solid rgba(59, 130, 246, 0.55);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.35);
+    animation: map-pulse 1.8s ease-out infinite;
+    pointer-events: none;
+  }
+
+  .map-status-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold shadow-sm backdrop-blur;
+  }
+
+  .map-status-chip-ready {
+    @apply border-emerald-200 bg-emerald-50/85 text-emerald-700;
+  }
+
+  .map-status-chip-warn {
+    @apply border-amber-200 bg-amber-50/85 text-amber-700;
+  }
+}
+
+@keyframes map-float {
+  0% {
+    transform: translateY(0px) scale(1);
+  }
+  100% {
+    transform: translateY(8px) scale(1.02);
+  }
+}
+
+@keyframes map-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.35);
+    opacity: 0.9;
+  }
+  80% {
+    box-shadow: 0 0 0 18px rgba(59, 130, 246, 0);
+    opacity: 0.15;
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    opacity: 0;
+  }
 }
 
 body {

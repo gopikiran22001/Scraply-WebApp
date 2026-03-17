@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Truck, MapPin, AlertTriangle, BookOpen, ArrowRight } from 'lucide-react';
+import { Truck, MapPin, List, BookOpen, ArrowRight } from 'lucide-react';
 
 export default function Home() {
     return (
@@ -17,8 +17,8 @@ export default function Home() {
                             Join Scraply in our mission to create sustainable communities through smart recycling and efficient waste collection.
                         </p>
                         <div className="flex flex-wrap gap-4">
-                            <Link to="/citizen/request-pickup" className="btn btn-primary flex items-center gap-2">
-                                Schedule Pickup <ArrowRight className="h-5 w-5" />
+                            <Link to="/citizen/request" className="btn btn-primary flex items-center gap-2">
+                                Create Request <ArrowRight className="h-5 w-5" />
                             </Link>
                             <Link to="/awareness" className="btn btn-secondary bg-white/10 border-white/20 text-white hover:bg-white/20 hover:border-white/30 backdrop-blur-sm">
                                 Learn More
@@ -32,10 +32,10 @@ export default function Home() {
             <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
                     <FeatureCard
-                        to="/citizen/request-pickup"
+                        to="/citizen/request"
                         icon={<Truck className="h-8 w-8 text-primary-600" />}
-                        title="Request Pickup"
-                        description="Schedule hassle-free waste collection at your doorstep."
+                        title="Create Request"
+                        description="Use one form to submit pickup requests or dump reports."
                     />
                     <FeatureCard
                         to="/citizen/centres"
@@ -44,10 +44,10 @@ export default function Home() {
                         description="Locate nearby recycling hubs and drop-off points."
                     />
                     <FeatureCard
-                        to="/citizen/report-dump"
-                        icon={<AlertTriangle className="h-8 w-8 text-orange-600" />}
-                        title="Report Dumping"
-                        description="Help keep our city clean by reporting illegal dumps."
+                        to="/citizen/pickups"
+                        icon={<List className="h-8 w-8 text-orange-600" />}
+                        title="My Requests"
+                        description="Track request history and completion status."
                     />
                     <FeatureCard
                         to="/awareness"
