@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { TrendingUp } from 'lucide-react';
 
-function clampHeight(value, maxValue) {
-    if (maxValue <= 0) {
-        return 6;
+function toHeightPercent(value, maxValue) {
+    if (maxValue <= 0 || value <= 0) {
+        return 0;
     }
 
-    return Math.max(6, Math.round((value / maxValue) * 120));
+    return Math.max(4, Math.round((value / maxValue) * 100));
 }
 
 export default function AdminTrendChart({
@@ -17,8 +17,8 @@ export default function AdminTrendChart({
     secondKey = 'reports',
     firstLabel = 'Pickups',
     secondLabel = 'Reports',
+    className = '',
 }) {
-    const [hoveredBucket, setHoveredBucket] = useState(null);
     const [visibleSeries, setVisibleSeries] = useState({
         first: true,
         second: true,
@@ -32,14 +32,14 @@ export default function AdminTrendChart({
         }, 0);
     }, [data, firstKey, secondKey, visibleSeries]);
 
+    const scaleMax = useMemo(() => Math.max(10, maxValue), [maxValue]);
+
     const totals = useMemo(() => {
         return data.reduce((acc, item) => ({
             first: acc.first + Number(item[firstKey] || 0),
             second: acc.second + Number(item[secondKey] || 0),
         }), { first: 0, second: 0 });
     }, [data, firstKey, secondKey]);
-
-    const tooltipData = hoveredBucket || null;
 
     const toggleSeries = (key) => {
         setVisibleSeries((previous) => ({
@@ -49,7 +49,7 @@ export default function AdminTrendChart({
     };
 
     return (
-        <div className="card p-5 border border-slate-200">
+        <div className={`card p-5 border border-slate-200 h-full flex flex-col ${className}`}>
             <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
                     <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -82,56 +82,59 @@ export default function AdminTrendChart({
                     No trend data available for the selected range.
                 </div>
             ) : (
-                <div className="overflow-x-auto no-scrollbar relative">
-                    <div className="min-w-[680px]">
-                        {tooltipData ? (
-                            <div className="mb-2 inline-flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
-                                <span className="font-semibold text-slate-700">{tooltipData.label}</span>
-                                <span className="inline-flex items-center gap-1 text-secondary-700">
-                                    <span className="h-2 w-2 rounded-full bg-secondary-500"></span>
-                                    {firstLabel}: <strong>{Number(tooltipData[firstKey] || 0)}</strong>
-                                </span>
-                                <span className="inline-flex items-center gap-1 text-amber-700">
-                                    <span className="h-2 w-2 rounded-full bg-amber-500"></span>
-                                    {secondLabel}: <strong>{Number(tooltipData[secondKey] || 0)}</strong>
-                                </span>
+                <div className="relative flex-1 min-h-[260px] flex flex-col">
+                    <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500">
+                        <span>Scale</span>
+                        <span>0 to {scaleMax}</span>
+                    </div>
+
+                    <div className="relative flex-1 border-t border-slate-100 pt-3 pl-8">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 w-8 text-[10px] text-slate-400">
+                            <div className="absolute top-0 -translate-y-1/2">{scaleMax}</div>
+                            <div className="absolute top-1/2 -translate-y-1/2">{Math.round(scaleMax / 2)}</div>
+                            <div className="absolute bottom-0 translate-y-1/2">0</div>
+                        </div>
+
+                        <div className="pointer-events-none absolute inset-y-0 left-8 right-0">
+                            <div className="absolute inset-x-0 top-0 border-t border-dashed border-slate-200"></div>
+                            <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-slate-200"></div>
+                            <div className="absolute inset-x-0 bottom-0 border-t border-dashed border-slate-200"></div>
+                        </div>
+
+                        <div className="h-full overflow-x-auto overflow-y-hidden no-scrollbar">
+                            <div className="min-w-[680px] h-full flex items-end gap-2 pr-2">
+                                {data.map((item) => {
+                                    const firstValue = Number(item[firstKey] || 0);
+                                    const secondValue = Number(item[secondKey] || 0);
+                                    const firstHeight = toHeightPercent(visibleSeries.first ? firstValue : 0, scaleMax);
+                                    const secondHeight = toHeightPercent(visibleSeries.second ? secondValue : 0, scaleMax);
+
+                                    return (
+                                        <div
+                                            key={item.bucket}
+                                            className="flex-1 min-w-[64px] h-full rounded-md"
+                                        >
+                                            <div className="h-full grid grid-rows-[1fr_auto]">
+                                                <div className="flex items-end justify-center gap-1 min-h-[140px]">
+                                                    <div
+                                                        className={`w-3 rounded-t ${visibleSeries.first ? 'bg-secondary-500' : 'bg-secondary-200/40'}`}
+                                                        style={{ height: `${firstHeight}%` }}
+                                                        aria-label={`${firstLabel}: ${firstValue}`}
+                                                    ></div>
+                                                    <div
+                                                        className={`w-3 rounded-t ${visibleSeries.second ? 'bg-amber-500' : 'bg-amber-200/40'}`}
+                                                        style={{ height: `${secondHeight}%` }}
+                                                        aria-label={`${secondLabel}: ${secondValue}`}
+                                                    ></div>
+                                                </div>
+                                                <div className="mt-2 text-center text-[11px] font-medium text-slate-500">
+                                                    {item.label}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
-                        ) : null}
-
-                        <div className="flex items-end gap-2 h-36">
-                            {data.map((item) => {
-                                const firstValue = Number(item[firstKey] || 0);
-                                const secondValue = Number(item[secondKey] || 0);
-                                const isHovered = hoveredBucket?.bucket === item.bucket;
-
-                                return (
-                                    <div
-                                        key={item.bucket}
-                                        className={`flex-1 min-w-[64px] rounded-md transition-colors ${isHovered ? 'bg-slate-50' : ''}`}
-                                        onMouseEnter={() => setHoveredBucket(item)}
-                                        onMouseLeave={() => setHoveredBucket(null)}
-                                        onFocus={() => setHoveredBucket(item)}
-                                        onBlur={() => setHoveredBucket(null)}
-                                        tabIndex={0}
-                                    >
-                                        <div className="h-32 flex items-end justify-center gap-1">
-                                            <div
-                                                className={`w-3 rounded-t transition-all duration-150 ${visibleSeries.first ? 'bg-secondary-500' : 'bg-secondary-200/40'} ${isHovered ? 'ring-1 ring-secondary-300' : ''}`}
-                                                style={{ height: `${clampHeight(visibleSeries.first ? firstValue : 0, maxValue)}px` }}
-                                                aria-label={`${firstLabel}: ${firstValue}`}
-                                            ></div>
-                                            <div
-                                                className={`w-3 rounded-t transition-all duration-150 ${visibleSeries.second ? 'bg-amber-500' : 'bg-amber-200/40'} ${isHovered ? 'ring-1 ring-amber-300' : ''}`}
-                                                style={{ height: `${clampHeight(visibleSeries.second ? secondValue : 0, maxValue)}px` }}
-                                                aria-label={`${secondLabel}: ${secondValue}`}
-                                            ></div>
-                                        </div>
-                                        <div className={`mt-2 text-center text-[11px] font-medium ${isHovered ? 'text-slate-700' : 'text-slate-500'}`}>
-                                            {item.label}
-                                        </div>
-                                    </div>
-                                );
-                            })}
                         </div>
                     </div>
                 </div>

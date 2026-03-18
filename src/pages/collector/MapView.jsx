@@ -723,19 +723,6 @@ export default function CollectorMapView() {
                             )}
                         </MapContainer>
 
-                        <div className="pointer-events-none absolute left-4 top-20 z-20">
-                            <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-lg backdrop-blur">
-                                <Route className="h-3.5 w-3.5" />
-                                Open Routing Navigation
-                            </div>
-                        </div>
-
-                        <div className="pointer-events-none absolute right-4 top-20 z-20">
-                            <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-lg backdrop-blur">
-                                <MapPin className="h-3.5 w-3.5 text-emerald-600" /> {mappableJobs.length} markers
-                            </div>
-                        </div>
-
                         {hoveredJob ? (
                             <div className="absolute bottom-4 left-4 z-20 max-w-sm rounded-xl border border-white/40 bg-white/90 p-3 shadow-xl backdrop-blur">
                                 <p className="text-xs font-semibold text-slate-800">{hoveredJob.category || 'MIXED'} · {hoveredJob.jobTypeLabel}</p>

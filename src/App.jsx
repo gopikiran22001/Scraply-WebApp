@@ -31,6 +31,7 @@ import AdminRequestUpdate from './pages/admin/RequestUpdate';
 import AdminCentres from './pages/admin/Centres';
 import AdminReports from './pages/admin/Reports';
 import AdminQueries from './pages/admin/Queries';
+import AdminPickers from './pages/admin/Pickers';
 
 import PageTitleUpdater from './components/PageTitleUpdater';
 
@@ -129,14 +130,9 @@ function App() {
                 <AdminDashboard />
               </ProtectedRoute>
             } />
-            <Route path="pickups" element={
+            <Route path="pickers" element={
               <ProtectedRoute roles={['ADMIN']}>
-                <AdminPickups />
-              </ProtectedRoute>
-            } />
-            <Route path="requests/update/:requestType/:id" element={
-              <ProtectedRoute roles={['ADMIN']}>
-                <AdminRequestUpdate />
+                <AdminPickers />
               </ProtectedRoute>
             } />
             <Route path="centres" element={
@@ -152,6 +148,16 @@ function App() {
             <Route path="queries" element={
               <ProtectedRoute roles={['ADMIN']}>
                 <AdminQueries />
+              </ProtectedRoute>
+            } />
+            <Route path="pickups" element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <AdminPickups />
+              </ProtectedRoute>
+            } />
+            <Route path="request-update" element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <AdminRequestUpdate />
               </ProtectedRoute>
             } />
           </Route>

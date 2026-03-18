@@ -518,8 +518,8 @@ export default function AdminDashboard() {
                     />
                 </div>
 
-                <div className="mt-6 grid xl:grid-cols-5 gap-6">
-                    <div className="xl:col-span-3">
+                <div className="mt-6 grid xl:grid-cols-5 gap-6 items-stretch">
+                    <div className="xl:col-span-3 h-full">
                         <AdminTrendChart
                             title={`${trendMode === 'WEEKLY' ? 'Weekly' : 'Monthly'} Trends`}
                             subtitle="Pickups vs dumps over time"
@@ -528,9 +528,10 @@ export default function AdminDashboard() {
                             secondKey="reports"
                             firstLabel="Pickups"
                             secondLabel="Dumps"
+                            className="h-full"
                         />
                     </div>
-                    <div className="xl:col-span-2">
+                    <div className="xl:col-span-2 h-full">
                         <AdminQuickActions
                             pickups={pickups}
                             reports={reports}
@@ -538,6 +539,7 @@ export default function AdminDashboard() {
                             onAssign={handleAssignmentAction}
                             onNote={handleCentreNoteAction}
                             onEscalation={handleEscalationAction}
+                            className="h-full"
                         />
                     </div>
                 </div>

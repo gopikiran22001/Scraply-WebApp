@@ -194,7 +194,7 @@ export default function MapContainer({
                     </span>
                 </div>
 
-                <div className="absolute right-4 top-4 z-30">
+                <div className="absolute left-4 top-14 z-30">
                     <button
                         type="button"
                         onClick={() => {

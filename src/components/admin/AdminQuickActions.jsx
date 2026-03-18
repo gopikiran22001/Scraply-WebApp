@@ -29,6 +29,7 @@ export default function AdminQuickActions({
     onAssign,
     onNote,
     onEscalation,
+    className = '',
 }) {
     const [activeTab, setActiveTab] = useState('assign');
     const [actions, setActions] = useState(() => readSavedActions());
@@ -171,7 +172,7 @@ export default function AdminQuickActions({
     ];
 
     return (
-        <div className="card p-5 border border-slate-200">
+        <div className={`card p-5 border border-slate-200 h-full ${className}`}>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                     <Bolt className="h-4 w-4 text-primary-600" /> Quick Create Actions

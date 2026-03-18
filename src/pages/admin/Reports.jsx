@@ -18,6 +18,7 @@ const STATUS_OPTIONS = [
     { value: 'CANCELLED', label: 'CANCELLED' },
 ];
 
+
 export default function AdminReports() {
     const { addToast } = useToast();
     const [pickups, setPickups] = useState([]);
@@ -35,6 +36,10 @@ export default function AdminReports() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [assignPickerIdMap, setAssignPickerIdMap] = useState({});
+    const [agentLogReport, setAgentLogReport] = useState(null);
+    const [agentLogLevelFilter, setAgentLogLevelFilter] = useState('ALL');
+    const [agentLogAgentFilter, setAgentLogAgentFilter] = useState('ALL');
+    const [agentLogEventFilter, setAgentLogEventFilter] = useState('ALL');
 
     const fetchData = useCallback(async (silent = false) => {
         if (silent) {
@@ -57,11 +62,24 @@ export default function AdminReports() {
             setPickups(pickups);
             setReports(illegalReports);
             setPickers(pickersList);
+
+            try {
+                const { data: logReportData } = await api.get('/auth/agent-logs/report', {
+                    params: {
+                        hours: 24,
+                        limit: 25,
+                    },
+                });
+                setAgentLogReport(logReportData || null);
+            } catch {
+                setAgentLogReport(null);
+            }
         } catch (error) {
             addToast(getApiErrorMessage(error, 'Error fetching report data'), 'error');
             setPickups([]);
             setReports([]);
             setPickers([]);
+            setAgentLogReport(null);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -367,6 +385,10 @@ export default function AdminReports() {
         }));
     }, [filteredReports]);
 
+    const recentAgentLogs = useMemo(() => {
+        return Array.isArray(agentLogReport?.recentLogs) ? agentLogReport.recentLogs : [];
+    }, [agentLogReport]);
+
     const handleColumnSort = (key) => {
         setSortConfig((previous) => ({
             key,
@@ -422,6 +444,40 @@ export default function AdminReports() {
         addToast('Report exported as CSV', 'success');
     };
 
+    const downloadAgentLogsCsv = () => {
+        if (filteredAgentLogs.length === 0) {
+            addToast('No agent log data available for export', 'error');
+            return;
+        }
+        const headers = ['id', 'agentId', 'level', 'message', 'eventType', 'requestType', 'requestId', 'details', 'createdAt'];
+        const rows = filteredAgentLogs.map((log) => [
+            log.id,
+            log.agentId,
+            log.level,
+            log.message,
+            log.eventType,
+            log.requestType,
+            log.requestId,
+            log.details,
+            log.createdAt,
+        ]);
+        const escapeValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+        const csv = [
+            headers.join(','),
+            ...rows.map((row) => row.map(escapeValue).join(',')),
+        ].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `agent-logs-${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        addToast('Agent logs exported as CSV', 'success');
+    };
+
     const statusBadgeClass = (status) => {
         if (status === 'COMPLETED') {
             return 'bg-emerald-100 text-emerald-700 border border-emerald-200';
@@ -441,6 +497,32 @@ export default function AdminReports() {
 
         return 'bg-amber-100 text-amber-700 border border-amber-200';
     };
+
+    const logLevelBadgeClass = (level) => {
+        const normalized = String(level || '').toUpperCase();
+        if (normalized === 'ERROR') {
+            return 'bg-rose-100 text-rose-700 border border-rose-200';
+        }
+        if (normalized === 'WARNING' || normalized === 'WARN') {
+            return 'bg-amber-100 text-amber-700 border border-amber-200';
+        }
+        if (normalized === 'DEBUG') {
+            return 'bg-slate-100 text-slate-700 border border-slate-200';
+        }
+        return 'bg-sky-100 text-sky-700 border border-sky-200';
+    };
+
+    const filteredAgentLogs = useMemo(() => {
+        if (!Array.isArray(agentLogReport?.recentLogs)) return [];
+        return agentLogReport.recentLogs.filter((log) => {
+            const levelMatch = agentLogLevelFilter === 'ALL' || String(log.level).toUpperCase() === agentLogLevelFilter;
+            const agentMatch = agentLogAgentFilter === 'ALL' || String(log.agentId) === agentLogAgentFilter;
+            const eventMatch = agentLogEventFilter === 'ALL' || String(log.eventType) === agentLogEventFilter;
+            return levelMatch && agentMatch && eventMatch;
+        });
+    }, [agentLogReport, agentLogLevelFilter, agentLogAgentFilter, agentLogEventFilter]);
+
+
 
     if (loading) {
         return <div className="text-center py-12 text-slate-600">Loading report center...</div>;
@@ -638,6 +720,97 @@ export default function AdminReports() {
                     onPageSizeChange={setPageSize}
                 />
 
+                <h2 className="text-lg font-bold text-slate-900 mt-10 mb-4">Agent Logs Report (Last 24 Hours)</h2>
+                <div className="grid md:grid-cols-3 gap-4 mb-5">
+                    <div className="card p-4">
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">Total Logs</p>
+                        <p className="text-2xl font-bold text-slate-900 mt-1">{agentLogReport?.totalLogs ?? 0}</p>
+                    </div>
+                    <div className="card p-4">
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">Error Logs</p>
+                        <p className="text-2xl font-bold text-rose-700 mt-1">{agentLogReport?.errorLogs ?? 0}</p>
+                    </div>
+                    <div className="card p-4">
+                        <p className="text-xs text-slate-500 uppercase tracking-wide">Warning Logs</p>
+                        <p className="text-2xl font-bold text-amber-700 mt-1">{agentLogReport?.warningLogs ?? 0}</p>
+                    </div>
+                </div>
+
+                {/* Agent log filters and CSV export in a single horizontal bar */}
+                <div className="flex flex-row gap-3 mb-4 items-center">
+                    <div className="flex-1 min-w-[160px]">
+                        <ListboxSelect
+                            value={agentLogLevelFilter}
+                            onChange={setAgentLogLevelFilter}
+                            options={[{ value: 'ALL', label: 'All levels' },
+                                { value: 'ERROR', label: 'Error' },
+                                { value: 'WARNING', label: 'Warning' },
+                                { value: 'WARN', label: 'Warn' },
+                                { value: 'INFO', label: 'Info' },
+                                { value: 'DEBUG', label: 'Debug' }]} />
+                    </div>
+                    <div className="flex-1 min-w-[160px]">
+                        <ListboxSelect
+                            value={agentLogAgentFilter}
+                            onChange={setAgentLogAgentFilter}
+                            options={[{ value: 'ALL', label: 'All agents' },
+                                ...Array.from(new Set((agentLogReport?.recentLogs || []).map(l => l.agentId))).filter(Boolean).map(agentId => ({ value: agentId, label: agentId }))]} />
+                    </div>
+                    <div className="flex-1 min-w-[160px]">
+                        <ListboxSelect
+                            value={agentLogEventFilter}
+                            onChange={setAgentLogEventFilter}
+                            options={[{ value: 'ALL', label: 'All events' },
+                                ...Array.from(new Set((agentLogReport?.recentLogs || []).map(l => l.eventType))).filter(Boolean).map(eventType => ({ value: eventType, label: eventType }))]} />
+                    </div>
+                    <button className="btn btn-primary inline-flex items-center gap-2 h-12" type="button" onClick={downloadAgentLogsCsv}>
+                        <Download className="h-4 w-4" /> Export Agent Logs CSV
+                    </button>
+                </div>
+
+                <div className="card overflow-hidden mb-8">
+                    <div className="overflow-x-auto no-scrollbar">
+                        <table className="w-full text-left text-sm text-slate-600">
+                            <thead className="bg-slate-50 text-slate-900 font-medium border-b border-slate-100">
+                                <tr>
+                                    <th className="px-6 py-4">Time</th>
+                                    <th className="px-6 py-4">Level</th>
+                                    <th className="px-6 py-4">Agent</th>
+                                    <th className="px-6 py-4">Request</th>
+                                    <th className="px-6 py-4">Event</th>
+                                    <th className="px-6 py-4">Message</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {filteredAgentLogs.map((log) => (
+                                    <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {log.createdAt ? new Date(log.createdAt).toLocaleString() : 'N/A'}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${logLevelBadgeClass(log.level)}`}>
+                                                {log.level || 'INFO'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4">{log.agentId || 'N/A'}</td>
+                                        <td className="px-6 py-4">{log.requestId || 'N/A'}</td>
+                                        <td className="px-6 py-4">{log.eventType || 'GENERAL'}</td>
+                                        <td className="px-6 py-4 max-w-xl truncate" title={log.message}>{log.message || 'N/A'}</td>
+                                    </tr>
+                                ))}
+
+                                {filteredAgentLogs.length === 0 && (
+                                    <tr>
+                                        <td className="px-6 py-8 text-center text-slate-500" colSpan={6}>
+                                            No agent logs available yet.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <h2 className="text-lg font-bold text-slate-900 mb-4">Available Exports</h2>
                 <div className="grid md:grid-cols-3 gap-4">
                     {['Illegal Reports (Filtered CSV)', 'Pickup Status Summary', 'Category Distribution'].map((reportName) => (
@@ -657,6 +830,8 @@ export default function AdminReports() {
                         </button>
                     ))}
                 </div>
+
+
             </div>
         </div>
     );

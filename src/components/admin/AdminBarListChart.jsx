@@ -28,6 +28,8 @@ export default function AdminBarListChart({
         return chartRows.reduce((acc, row) => Math.max(acc, row.value), 0);
     }, [chartRows]);
 
+    const scaleMax = useMemo(() => Math.max(10, maxValue), [maxValue]);
+
     return (
         <div className="card p-5 border border-slate-200">
             <div className="mb-4">
@@ -41,8 +43,13 @@ export default function AdminBarListChart({
                 </div>
             ) : (
                 <div className="space-y-3">
+                    <div className="flex items-center justify-between text-[11px] text-slate-500">
+                        <span>0</span>
+                        <span>Scale: 0 to {scaleMax}</span>
+                        <span>{scaleMax}</span>
+                    </div>
                     {chartRows.map((row) => {
-                        const width = maxValue ? Math.round((row.value / maxValue) * 100) : 0;
+                        const width = scaleMax ? Math.round((row.value / scaleMax) * 100) : 0;
 
                         return (
                             <div key={row.label}>
