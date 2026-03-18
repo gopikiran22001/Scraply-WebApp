@@ -45,6 +45,7 @@ export default function Navbar() {
                             <>
                                 <Link to="/citizen/dashboard" className={navLinkClass('/citizen/dashboard')}>Dashboard</Link>
                                 <Link to="/citizen/request" className={navLinkClass('/citizen/request')}>Create Request</Link>
+                                <Link to="/citizen/queries" className={navLinkClass('/citizen/queries')}>Queries</Link>
                             </>
                         )}
 
@@ -58,9 +59,10 @@ export default function Navbar() {
                         {isAdmin && (
                             <>
                                 <Link to="/admin/dashboard" className={navLinkClass('/admin/dashboard')}>Dashboard</Link>
-                                <Link to="/admin/pickups" className={navLinkClass('/admin/pickups')}>Pickups</Link>
+                                <Link to="/admin/pickups" className={navLinkClass('/admin/pickups')}>Requests</Link>
+                                <Link to="/admin/queries" className={navLinkClass('/admin/queries')}>Queries</Link>
                                 <Link to="/admin/centres" className={navLinkClass('/admin/centres')}>Centres</Link>
-                                <Link to="/admin/reports" className={navLinkClass('/admin/reports')}>Reports</Link>
+                                <Link to="/admin/reports" className={navLinkClass('/admin/reports')}>Report</Link>
                             </>
                         )}
 
@@ -86,6 +88,7 @@ export default function Navbar() {
                                     <div className="rounded-lg border border-gray-200 bg-white shadow-lg py-1">
                                         <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Profile</Link>
                                         {isCitizen ? <Link to="/citizen/pickups" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">My Requests</Link> : null}
+                                        {isCitizen ? <Link to="/citizen/queries" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">My Queries</Link> : null}
                                         {isCitizen ? <Link to="/citizen/points" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Points</Link> : null}
                                         <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
                                             <LogOut className="h-4 w-4" />

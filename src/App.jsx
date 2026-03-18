@@ -9,6 +9,7 @@ import Register from './pages/Register';
 import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
+import PublicOnlyRoute from './components/PublicOnlyRoute';
 
 // Citizen Pages
 import CitizenDashboard from './pages/citizen/Dashboard';
@@ -16,6 +17,7 @@ import RequestPickup from './pages/citizen/RequestPickup';
 import Pickups from './pages/citizen/Pickups';
 import Centres from './pages/citizen/Centres';
 import Points from './pages/citizen/Points';
+import CitizenQueries from './pages/citizen/Queries';
 
 // Collector Pages
 import CollectorDashboard from './pages/collector/Dashboard';
@@ -25,8 +27,10 @@ import CollectorMapView from './pages/collector/MapView';
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminPickups from './pages/admin/Pickups';
+import AdminRequestUpdate from './pages/admin/RequestUpdate';
 import AdminCentres from './pages/admin/Centres';
 import AdminReports from './pages/admin/Reports';
+import AdminQueries from './pages/admin/Queries';
 
 import PageTitleUpdater from './components/PageTitleUpdater';
 
@@ -39,8 +43,16 @@ function App() {
           <Route index element={<Home />} />
           <Route path="home" element={<Home />} />
           <Route path="awareness" element={<Awareness />} />
-          <Route path="login" element={<Login />} />
-          <Route path="register" element={<Register />} />
+          <Route path="login" element={
+            <PublicOnlyRoute>
+              <Login />
+            </PublicOnlyRoute>
+          } />
+          <Route path="register" element={
+            <PublicOnlyRoute>
+              <Register />
+            </PublicOnlyRoute>
+          } />
           <Route path="profile" element={
             <ProtectedRoute>
               <Profile />
@@ -67,6 +79,11 @@ function App() {
             <Route path="pickups" element={
               <ProtectedRoute roles={['USER', 'ADMIN']}>
                 <Pickups />
+              </ProtectedRoute>
+            } />
+            <Route path="queries" element={
+              <ProtectedRoute roles={['USER', 'ADMIN']}>
+                <CitizenQueries />
               </ProtectedRoute>
             } />
             <Route path="report-dump" element={
@@ -117,6 +134,11 @@ function App() {
                 <AdminPickups />
               </ProtectedRoute>
             } />
+            <Route path="requests/update/:requestType/:id" element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <AdminRequestUpdate />
+              </ProtectedRoute>
+            } />
             <Route path="centres" element={
               <ProtectedRoute roles={['ADMIN']}>
                 <AdminCentres />
@@ -125,6 +147,11 @@ function App() {
             <Route path="reports" element={
               <ProtectedRoute roles={['ADMIN']}>
                 <AdminReports />
+              </ProtectedRoute>
+            } />
+            <Route path="queries" element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <AdminQueries />
               </ProtectedRoute>
             } />
           </Route>

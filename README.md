@@ -14,12 +14,18 @@ Create a `.env` file in this folder and set:
 
 ```
 VITE_API_URL=http://localhost:8080
+VITE_MAP_STYLE_LIGHT=https://basemaps.cartocdn.com/gl/positron-gl-style/style.json
+VITE_MAP_STYLE_DARK=https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json
+VITE_MAP_STYLE_VOYAGER=https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json
+VITE_ROUTING_API_URL=https://router.project-osrm.org/route/v1/driving
 VITE_GEOCODE_API_URL=https://nominatim.openstreetmap.org/reverse
+VITE_GEOCODE_SEARCH_API_URL=https://nominatim.openstreetmap.org/search
 ```
 
 Notes:
 - `VITE_API_URL` must point to the running Rest-API backend.
 - Do not include a trailing slash in `VITE_API_URL`.
+- Map styles are URL-based and do not require proprietary map tokens.
 - Backend CORS expects the exact frontend origin configured in Rest-API secrets.
 
 ## Scripts

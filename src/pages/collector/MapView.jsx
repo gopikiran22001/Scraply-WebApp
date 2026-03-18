@@ -1,15 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
-import L from 'leaflet';
+import maplibregl from 'maplibre-gl';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import { getApiErrorMessage } from '../../utils/apiError';
 import ListboxSelect from '../../components/ListboxSelect';
-import { ArrowLeft, AlertTriangle, Clock, Crosshair, MapPin, Navigation, Route } from 'lucide-react';
+import MapContainer from '../../components/map/MapContainer';
+import MarkerLayer from '../../components/map/MarkerLayer';
+import RouteLayer from '../../components/map/RouteLayer';
+import LiveTrackingController from '../../components/map/LiveTrackingController';
+import CancellationReasonModal from '../../components/CancellationReasonModal';
+import { ArrowLeft, AlertTriangle, CheckCircle, Clock, Crosshair, MapPin, Navigation, RotateCcw, Route, XCircle } from 'lucide-react';
 
-const DEFAULT_CENTER = [20.5937, 78.9629];
+const DEFAULT_CENTER = [78.9629, 20.5937];
 const ACTIVE_STATUSES = ['REQUESTED', 'ASSIGNED', 'IN_PROGRESS'];
+const ROUTING_API_URL = String(import.meta.env.VITE_ROUTING_API_URL || 'https://router.project-osrm.org/route/v1/driving').trim();
+const ROUTING_FALLBACK_URLS = [
+    ROUTING_API_URL,
+    'https://router.project-osrm.org/route/v1/driving',
+    'https://routing.openstreetmap.de/routed-car/route/v1/driving',
+];
 
 const STATUS_OPTIONS = [
     { value: 'ALL', label: 'All Statuses' },
@@ -26,26 +36,25 @@ const TYPE_OPTIONS = [
     { value: 'DUMP', label: 'Dump Reports' },
 ];
 
-function createPinIcon(color, label) {
-    return L.divIcon({
-        className: 'picker-map-marker',
-        html: `<div style="width: 30px; height: 30px; border-radius: 999px; background: ${color}; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; border: 2px solid #fff; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.35);">${label}</div>`,
-        iconSize: [30, 30],
-        iconAnchor: [15, 15],
-    });
+function isValidCoordinate(latitude, longitude) {
+    return Number.isFinite(latitude) && Number.isFinite(longitude);
 }
 
-const PICKUP_ICON = createPinIcon('#2563eb', 'P');
-const DUMP_ICON = createPinIcon('#ea580c', 'D');
-const CURRENT_ICON = createPinIcon('#0f172a', 'ME');
+function toLngLat(latitude, longitude) {
+    if (!isValidCoordinate(latitude, longitude)) {
+        return null;
+    }
+
+    return [Number(longitude), Number(latitude)];
+}
 
 function haversineDistanceKm(from, to) {
     if (!from || !to) {
         return null;
     }
 
-    const [lat1, lon1] = from;
-    const [lat2, lon2] = to;
+    const [lon1, lat1] = from;
+    const [lon2, lat2] = to;
     const toRad = (value) => (value * Math.PI) / 180;
     const earthRadiusKm = 6371;
 
@@ -58,27 +67,153 @@ function haversineDistanceKm(from, to) {
     return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function dedupeWaypoints(points) {
+    const seen = new Set();
+
+    return points.filter((point) => {
+        const key = `${point[0].toFixed(6)},${point[1].toFixed(6)}`;
+        if (seen.has(key)) {
+            return false;
+        }
+
+        seen.add(key);
+        return true;
+    });
+}
+
+function toErrorMessage(error) {
+    if (!error) {
+        return 'Unknown error';
+    }
+
+    if (typeof error === 'string') {
+        return error;
+    }
+
+    return String(error.message || error);
+}
+
+function normalizeRoutingBaseUrl(url) {
+    return String(url || '').trim().replace(/\/+$/, '');
+}
+
+function buildRoutingProviders() {
+    const unique = [];
+    const seen = new Set();
+
+    for (const provider of ROUTING_FALLBACK_URLS) {
+        const normalized = normalizeRoutingBaseUrl(provider);
+        if (!normalized || seen.has(normalized)) {
+            continue;
+        }
+
+        seen.add(normalized);
+        unique.push(normalized);
+    }
+
+    return unique;
+}
+
+function fitMapToCoordinates(map, coordinates, options = {}) {
+    if (!map || !Array.isArray(coordinates) || coordinates.length === 0) {
+        return;
+    }
+
+    const valid = coordinates.filter((point) => Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1]));
+    if (valid.length === 0) {
+        return;
+    }
+
+    if (valid.length === 1) {
+        map.flyTo({
+            center: valid[0],
+            zoom: options.singlePointZoom ?? 15,
+            duration: options.duration ?? 850,
+            essential: true,
+        });
+        return;
+    }
+
+    const bounds = valid.reduce(
+        (result, point) => result.extend(point),
+        new maplibregl.LngLatBounds(valid[0], valid[0])
+    );
+
+    map.fitBounds(bounds, {
+        padding: options.padding ?? 88,
+        maxZoom: options.maxZoom ?? 15.5,
+        duration: options.duration ?? 900,
+        essential: true,
+    });
+}
+
+function buildNavigationWaypoints(currentLocation, selectedJob, filteredJobs) {
+    void filteredJobs;
+
+    if (!currentLocation || !selectedJob) {
+        return [];
+    }
+
+    const selectedPoint = toLngLat(selectedJob.latitude, selectedJob.longitude);
+    if (!selectedPoint) {
+        return [];
+    }
+
+    // Route directly to the selected request so the path aligns with the chosen marker.
+    return dedupeWaypoints([currentLocation, selectedPoint]);
+}
+
 export default function CollectorMapView() {
     const { addToast } = useToast();
     const [searchParams] = useSearchParams();
+    const requestedJobId = searchParams.get('jobId');
+    const shouldAutoNavigate = searchParams.get('navigate') === '1';
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [statusFilter, setStatusFilter] = useState('ALL');
+    const [statusFilter, setStatusFilter] = useState('ASSIGNED');
     const [typeFilter, setTypeFilter] = useState('ALL');
-    const [selectedJobId, setSelectedJobId] = useState(searchParams.get('jobId') || null);
+    const [selectedJobId, setSelectedJobId] = useState(requestedJobId || null);
+    const [hoveredJobId, setHoveredJobId] = useState(null);
     const [currentLocation, setCurrentLocation] = useState(null);
+    const [trackerPosition, setTrackerPosition] = useState(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [routePath, setRoutePath] = useState([]);
-    const mapRef = useRef(null);
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+    const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+    const [cancelReason, setCancelReason] = useState('');
+    const [mapState, setMapState] = useState({ map: null, styleRevision: 0 });
+
     const watchIdRef = useRef(null);
     const lastRouteFetchRef = useRef(0);
+    const hasAutoFramedRef = useRef(false);
+    const hasRoutingErrorRef = useRef(false);
+
+    const handleMapReady = useCallback((map) => {
+        setMapState((state) => {
+            if (state.map === map) {
+                return state;
+            }
+
+            return {
+                map,
+                styleRevision: state.styleRevision + 1,
+            };
+        });
+    }, []);
+
+    const handleMapError = useCallback(() => {
+        addToast('Map initialization failed. Check style URLs and network connectivity.', 'error');
+    }, [addToast]);
 
     const fetchJobs = useCallback(async () => {
         try {
-            const [{ data: pickupData }, { data: dumpData }] = await Promise.all([
+            const [pickupsResult, dumpsResult] = await Promise.allSettled([
                 api.get('/pickups/'),
                 api.get('/illegals/'),
             ]);
+
+            const pickupData = pickupsResult.status === 'fulfilled' ? pickupsResult.value?.data : [];
+            const dumpData = dumpsResult.status === 'fulfilled' ? dumpsResult.value?.data : [];
 
             const pickupJobs = (Array.isArray(pickupData) ? pickupData : []).map((job) => ({
                 ...job,
@@ -98,6 +233,14 @@ export default function CollectorMapView() {
                 jobDate: job.reportedAt || job.requestedAt || null,
             }));
 
+            if (pickupsResult.status === 'rejected' && dumpsResult.status === 'rejected') {
+                addToast('Unable to load pickups and dump reports', 'error');
+            } else if (pickupsResult.status === 'rejected') {
+                addToast('Unable to load pickups. Showing available dump reports.', 'error');
+            } else if (dumpsResult.status === 'rejected') {
+                addToast('Unable to load dump reports. Showing available pickups.', 'error');
+            }
+
             setJobs([...pickupJobs, ...dumpJobs]);
         } catch (error) {
             addToast(getApiErrorMessage(error, 'Unable to load map jobs'), 'error');
@@ -111,20 +254,25 @@ export default function CollectorMapView() {
     }, [fetchJobs]);
 
     useEffect(() => {
+        setSelectedJobId(requestedJobId || null);
+    }, [requestedJobId]);
+
+    useEffect(() => {
         if (!navigator.geolocation) {
             return;
         }
 
         watchIdRef.current = navigator.geolocation.watchPosition(
             (position) => {
-                setCurrentLocation([position.coords.latitude, position.coords.longitude]);
+                const nextPoint = [position.coords.longitude, position.coords.latitude];
+                setCurrentLocation(nextPoint);
             },
             () => {
                 setCurrentLocation(null);
             },
             {
                 enableHighAccuracy: true,
-                maximumAge: 5000,
+                maximumAge: 3000,
                 timeout: 10000,
             }
         );
@@ -137,12 +285,8 @@ export default function CollectorMapView() {
         };
     }, []);
 
-    const geocodedJobs = useMemo(() => {
-        return jobs.filter((job) => Number.isFinite(job.latitude) && Number.isFinite(job.longitude));
-    }, [jobs]);
-
     const filteredJobs = useMemo(() => {
-        return geocodedJobs
+        return jobs
             .filter((job) => typeFilter === 'ALL' || job.jobType === typeFilter)
             .filter((job) => statusFilter === 'ALL' || String(job.status || '').toUpperCase() === statusFilter)
             .sort((left, right) => {
@@ -150,129 +294,337 @@ export default function CollectorMapView() {
                 const rightDate = right.jobDate ? new Date(right.jobDate).getTime() : 0;
                 return rightDate - leftDate;
             });
-    }, [geocodedJobs, typeFilter, statusFilter]);
+    }, [jobs, typeFilter, statusFilter]);
+
+    const mappableJobs = useMemo(() => {
+        return filteredJobs.filter((job) => isValidCoordinate(job.latitude, job.longitude));
+    }, [filteredJobs]);
 
     const selectedJob = useMemo(() => {
-        return filteredJobs.find((job) => job.id === selectedJobId) || null;
+        return filteredJobs.find((job) => String(job.id) === String(selectedJobId)) || null;
     }, [filteredJobs, selectedJobId]);
 
-    const destination = selectedJob ? [selectedJob.latitude, selectedJob.longitude] : null;
-    const distanceKm = useMemo(() => haversineDistanceKm(currentLocation, destination), [currentLocation, destination]);
+    const hoveredJob = useMemo(() => {
+        if (!hoveredJobId) {
+            return null;
+        }
+
+        return filteredJobs.find((job) => String(job.id) === String(hoveredJobId)) || null;
+    }, [filteredJobs, hoveredJobId]);
+
+    const destination = selectedJob ? toLngLat(selectedJob.latitude, selectedJob.longitude) : null;
+    const routeOrigin = trackerPosition || currentLocation;
+    const distanceKm = useMemo(() => haversineDistanceKm(routeOrigin, destination), [routeOrigin, destination]);
     const etaMinutes = distanceKm !== null ? Math.max(1, Math.round((distanceKm / 28) * 60)) : null;
 
     useEffect(() => {
-        if (!selectedJobId && filteredJobs.length > 0) {
-            setSelectedJobId(filteredJobs[0].id);
+        if (loading || !selectedJobId) {
             return;
         }
 
-        if (selectedJobId && !filteredJobs.some((job) => job.id === selectedJobId)) {
-            setSelectedJobId(filteredJobs[0]?.id || null);
+        if (!filteredJobs.some((job) => String(job.id) === String(selectedJobId))) {
+            setSelectedJobId(null);
         }
-    }, [filteredJobs, selectedJobId]);
+    }, [filteredJobs, loading, selectedJobId]);
 
     useEffect(() => {
-        if (!mapRef.current) {
+        if (loading || !requestedJobId || selectedJobId) {
             return;
         }
 
-        if (isNavigating && currentLocation && destination) {
-            mapRef.current.fitBounds([currentLocation, destination], { padding: [70, 70], maxZoom: 16 });
+        const requestedJob = jobs.find((job) => String(job.id) === String(requestedJobId));
+        if (requestedJob) {
+            setSelectedJobId(requestedJob.id);
+        }
+    }, [jobs, loading, requestedJobId, selectedJobId]);
+
+    useEffect(() => {
+        const map = mapState.map;
+        if (!map || hasAutoFramedRef.current || filteredJobs.length === 0) {
             return;
         }
 
-        if (selectedJob) {
-            mapRef.current.flyTo([selectedJob.latitude, selectedJob.longitude], 15, { duration: 0.75 });
+        const points = mappableJobs
+            .map((job) => toLngLat(job.latitude, job.longitude))
+            .filter((point) => Array.isArray(point));
+
+        if (points.length === 0) {
             return;
         }
 
-        if (currentLocation) {
-            mapRef.current.flyTo(currentLocation, 14, { duration: 0.75 });
-            return;
-        }
-
-        if (filteredJobs.length > 0) {
-            const bounds = L.latLngBounds(filteredJobs.map((job) => [job.latitude, job.longitude]));
-            mapRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
-        }
-    }, [selectedJob, currentLocation, destination, filteredJobs, isNavigating]);
+        fitMapToCoordinates(map, points, { maxZoom: 13.8 });
+        hasAutoFramedRef.current = true;
+    }, [mappableJobs, mapState.map]);
 
     const activeJobs = filteredJobs.filter((job) => ACTIVE_STATUSES.includes(String(job.status || '').toUpperCase()));
 
-    const startNavigation = (job) => {
+    const focusJob = useCallback(
+        (jobId) => {
+            const map = mapState.map;
+            const job = filteredJobs.find((item) => String(item.id) === String(jobId));
+            if (!job) {
+                return;
+            }
+
+            setSelectedJobId(job.id);
+            const point = toLngLat(job.latitude, job.longitude);
+            if (!map || !point) {
+                addToast('Selected job has no valid coordinates for map focus', 'error');
+                return;
+            }
+
+            map.flyTo({
+                center: point,
+                zoom: 15.8,
+                duration: 750,
+                essential: true,
+            });
+        },
+        [filteredJobs, mapState.map]
+    );
+
+    const startNavigation = useCallback((job) => {
+        const destinationPoint = toLngLat(job.latitude, job.longitude);
+        if (!destinationPoint) {
+            addToast('This job has no valid coordinates for navigation', 'error');
+            return;
+        }
+
         setSelectedJobId(job.id);
         setIsNavigating(true);
-    };
+    }, [addToast]);
 
-    const stopNavigation = () => {
+    const stopNavigation = useCallback(() => {
         setIsNavigating(false);
         setRoutePath([]);
-    };
+    }, []);
 
-    const onLocateMe = () => {
+    const updateSelectedJobStatus = useCallback(async (nextStatus, cancellationReason) => {
+        if (!selectedJob) {
+            return;
+        }
+
+        if (nextStatus === 'CANCELLED') {
+            const trimmedReason = String(cancellationReason || '').trim();
+            if (!trimmedReason) {
+                setIsCancelModalOpen(true);
+                return;
+            }
+
+            cancellationReason = trimmedReason;
+        }
+
+        if (nextStatus === 'CANCELLED') {
+            setIsCancelModalOpen(false);
+            setCancelReason('');
+        }
+
+        setIsUpdatingStatus(true);
+        try {
+            const payload = {
+                id: selectedJob.id,
+                status: nextStatus,
+            };
+
+            if (nextStatus === 'CANCELLED') {
+                payload.reason = cancellationReason;
+            }
+
+            if (selectedJob.jobType === 'PICKUP') {
+                await api.put('/pickups/', payload);
+                addToast(`Pickup marked ${nextStatus}`, 'success');
+            } else {
+                await api.put('/illegals/', payload);
+                addToast(`Dump report marked ${nextStatus}`, 'success');
+            }
+
+            if (nextStatus === 'COMPLETED' || nextStatus === 'CANCELLED') {
+                stopNavigation();
+            }
+
+            await fetchJobs();
+        } catch (error) {
+            addToast(getApiErrorMessage(error, 'Failed to update request status'), 'error');
+        } finally {
+            setIsUpdatingStatus(false);
+        }
+    }, [addToast, fetchJobs, selectedJob, stopNavigation]);
+
+    const resetView = useCallback(() => {
+        const map = mapState.map;
+        if (!map) {
+            return;
+        }
+
+        const points = mappableJobs.map((job) => toLngLat(job.latitude, job.longitude)).filter((point) => Array.isArray(point));
+        if (points.length > 0) {
+            fitMapToCoordinates(map, points, { padding: 90, maxZoom: 14 });
+            return;
+        }
+
+        map.flyTo({ center: DEFAULT_CENTER, zoom: 5, duration: 700 });
+    }, [mappableJobs, mapState.map]);
+
+    const centerMapOnPoint = useCallback((point, zoom = 16) => {
+        const map = mapState.map;
+        if (!map || !Array.isArray(point)) {
+            return;
+        }
+
+        map.flyTo({
+            center: point,
+            zoom,
+            duration: 800,
+            essential: true,
+        });
+    }, [mapState.map]);
+
+    const onLocateMe = useCallback(() => {
         if (!navigator.geolocation) {
             addToast('Geolocation is not supported by your browser', 'error');
             return;
         }
 
+        // If watchPosition already has a recent point, center immediately.
+        if (Array.isArray(currentLocation)) {
+            centerMapOnPoint(currentLocation);
+        }
+
+        const onPositionResolved = (position) => {
+            const nextPoint = [position.coords.longitude, position.coords.latitude];
+            setCurrentLocation(nextPoint);
+            centerMapOnPoint(nextPoint);
+        };
+
+        const fallbackLowAccuracy = () => {
+            navigator.geolocation.getCurrentPosition(
+                onPositionResolved,
+                (error) => {
+                    const reason = error?.code === 1
+                        ? 'Location permission denied. Please allow location access in your browser.'
+                        : 'Unable to get your location. Please check device location settings.';
+                    addToast(reason, 'error');
+                },
+                { enableHighAccuracy: false, timeout: 15000, maximumAge: 15000 }
+            );
+        };
+
         navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const nextPosition = [position.coords.latitude, position.coords.longitude];
-                setCurrentLocation(nextPosition);
-                if (mapRef.current) {
-                    mapRef.current.flyTo(nextPosition, 14, { duration: 0.75 });
-                }
-            },
-            () => addToast('Unable to get your location', 'error')
+            onPositionResolved,
+            fallbackLowAccuracy,
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
         );
-    };
+    }, [addToast, centerMapOnPoint, currentLocation]);
+
+    const navigationWaypoints = useMemo(() => {
+        return buildNavigationWaypoints(routeOrigin, selectedJob, filteredJobs);
+    }, [routeOrigin, selectedJob, filteredJobs]);
+
+    useEffect(() => {
+        if (!selectedJob) {
+            return;
+        }
+
+        const map = mapState.map;
+        const point = toLngLat(selectedJob.latitude, selectedJob.longitude);
+        if (map && point) {
+            map.flyTo({
+                center: point,
+                zoom: 15.8,
+                duration: 750,
+                essential: true,
+            });
+        }
+
+        if (shouldAutoNavigate && !isNavigating) {
+            startNavigation(selectedJob);
+        }
+    }, [isNavigating, mapState.map, selectedJob, shouldAutoNavigate, startNavigation]);
+
+    const isSelectedJobClosed = useMemo(() => {
+        return selectedJob
+            ? ['COMPLETED', 'CANCELLED'].includes(String(selectedJob.status || '').toUpperCase())
+            : false;
+    }, [selectedJob]);
+
+    useEffect(() => {
+        if (!isNavigating || navigationWaypoints.length < 2) {
+            setRoutePath([]);
+            return;
+        }
+
+        setRoutePath(navigationWaypoints);
+    }, [isNavigating, navigationWaypoints]);
+
+    useEffect(() => {
+        const map = mapState.map;
+        if (!map || !isNavigating || routePath.length < 2) {
+            return;
+        }
+
+        fitMapToCoordinates(map, routePath, { padding: 110, maxZoom: 15 });
+    }, [isNavigating, mapState.map, routePath]);
 
     useEffect(() => {
         const fetchRoute = async () => {
-            if (!isNavigating || !currentLocation || !destination) {
-                setRoutePath([]);
+            if (!isNavigating || navigationWaypoints.length < 2) {
                 return;
             }
 
             const now = Date.now();
-            if (now - lastRouteFetchRef.current < 6000) {
+            if (now - lastRouteFetchRef.current < 5000) {
                 return;
             }
             lastRouteFetchRef.current = now;
 
-            try {
-                const origin = `${currentLocation[1]},${currentLocation[0]}`;
-                const target = `${destination[1]},${destination[0]}`;
-                const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${origin};${target}?overview=full&geometries=geojson`);
+            const coordinatesPath = navigationWaypoints.map((point) => `${point[0]},${point[1]}`).join(';');
+            const providers = buildRoutingProviders();
+            const failures = [];
 
-                if (!response.ok) {
-                    throw new Error('OSRM route fetch failed');
+            for (const provider of providers) {
+                try {
+                    const url = new URL(`${provider}/${coordinatesPath}`);
+                    url.searchParams.set('overview', 'full');
+                    url.searchParams.set('geometries', 'geojson');
+                    url.searchParams.set('alternatives', 'false');
+                    url.searchParams.set('steps', 'false');
+
+                    const response = await fetch(url.toString());
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    const coordinates = data?.routes?.[0]?.geometry?.coordinates;
+                    if (Array.isArray(coordinates) && coordinates.length > 1) {
+                        setRoutePath(coordinates);
+                        hasRoutingErrorRef.current = false;
+                        return;
+                    }
+
+                    throw new Error('No route geometry returned');
+                } catch (error) {
+                    failures.push(`${provider}: ${toErrorMessage(error)}`);
                 }
+            }
 
-                const data = await response.json();
-                const coordinates = data?.routes?.[0]?.geometry?.coordinates;
-
-                if (Array.isArray(coordinates) && coordinates.length > 1) {
-                    setRoutePath(coordinates.map(([lon, lat]) => [lat, lon]));
-                    return;
-                }
-
-                setRoutePath([currentLocation, destination]);
-            } catch {
-                // Fallback to direct line when route service is unavailable.
-                setRoutePath([currentLocation, destination]);
+            setRoutePath(navigationWaypoints);
+            if (!hasRoutingErrorRef.current) {
+                const details = failures.length > 0 ? ` (${failures[0]})` : '';
+                addToast(`Routing provider unavailable. Showing direct path fallback.${details}`, 'error');
+                hasRoutingErrorRef.current = true;
             }
         };
 
         fetchRoute();
-    }, [isNavigating, currentLocation, destination]);
+    }, [addToast, isNavigating, navigationWaypoints]);
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Live Assignment Map</h1>
-                    <p className="text-sm text-gray-500">Ride-hailing style map for pickups and dump reports.</p>
+                    <p className="text-sm text-gray-500">MapLibre-powered dispatch map for pickups and dump reports.</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <Link to="/collector/dashboard" className="btn btn-secondary text-sm flex items-center gap-1">
@@ -281,24 +633,17 @@ export default function CollectorMapView() {
                     <button type="button" onClick={onLocateMe} className="btn btn-primary text-sm flex items-center gap-1">
                         <Crosshair className="h-4 w-4" /> Locate Me
                     </button>
+                    <button type="button" onClick={resetView} className="btn btn-secondary text-sm flex items-center gap-1">
+                        <RotateCcw className="h-4 w-4" /> Reset View
+                    </button>
                 </div>
             </div>
 
-            <div className="grid lg:grid-cols-[340px_1fr] gap-4">
-                <div className="card p-4 lg:h-[74vh] overflow-hidden flex flex-col">
+            <div className="grid lg:grid-cols-[340px_1fr] gap-4 items-start">
+                <div className="card p-4 lg:h-[74vh] overflow-hidden flex flex-col lg:sticky lg:top-24 z-30 bg-white/95 backdrop-blur">
                     <div className="grid gap-3 mb-4">
-                        <ListboxSelect
-                            label="Job Type"
-                            value={typeFilter}
-                            onChange={setTypeFilter}
-                            options={TYPE_OPTIONS}
-                        />
-                        <ListboxSelect
-                            label="Status"
-                            value={statusFilter}
-                            onChange={setStatusFilter}
-                            options={STATUS_OPTIONS}
-                        />
+                        <ListboxSelect label="Job Type" value={typeFilter} onChange={setTypeFilter} options={TYPE_OPTIONS} />
+                        <ListboxSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} />
                     </div>
 
                     <div className="mb-3 rounded-xl bg-gray-50 border border-gray-100 p-3 text-sm text-gray-600">
@@ -311,15 +656,15 @@ export default function CollectorMapView() {
                         {!loading && filteredJobs.length === 0 ? <div className="text-sm text-gray-500">No jobs found for the selected filters.</div> : null}
 
                         {filteredJobs.map((job) => {
-                            const isSelected = selectedJobId === job.id;
+                            const isSelected = String(selectedJobId) === String(job.id);
                             const isDump = job.jobType === 'DUMP';
-                            const tone = isDump ? 'text-orange-600 bg-orange-50 border-orange-100' : 'text-blue-600 bg-blue-50 border-blue-100';
+                            const tone = isDump ? 'text-red-600 bg-red-50 border-red-100' : 'text-emerald-600 bg-emerald-50 border-emerald-100';
 
                             return (
                                 <button
                                     key={`${job.jobType}-${job.id}`}
                                     type="button"
-                                    onClick={() => setSelectedJobId(job.id)}
+                                    onClick={() => focusJob(job.id)}
                                     className={`w-full text-left p-3 rounded-xl border transition-all ${isSelected ? 'border-primary-400 bg-primary-50 shadow-sm' : 'border-gray-100 bg-white hover:bg-gray-50'}`}
                                 >
                                     <div className="flex items-start justify-between gap-2">
@@ -344,62 +689,67 @@ export default function CollectorMapView() {
                     </div>
                 </div>
 
-                <div className="relative card overflow-hidden lg:h-[74vh] bg-slate-900">
-                    <MapContainer
-                        center={currentLocation || DEFAULT_CENTER}
-                        zoom={currentLocation ? 14 : 12}
-                        className="h-[72vh] lg:h-full w-full"
-                        whenCreated={(mapInstance) => {
-                            mapRef.current = mapInstance;
-                        }}
-                    >
-                        <TileLayer
-                            attribution='&copy; OpenStreetMap contributors'
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        />
+                <div className="space-y-3">
+                    <div className="relative z-0 lg:h-[74vh]">
+                        <MapContainer
+                            initialCenter={DEFAULT_CENTER}
+                            initialZoom={5}
+                            className="h-[72vh] lg:h-full"
+                            onMapReady={handleMapReady}
+                            onMapError={handleMapError}
+                        >
+                            {({ map, styleRevision }) => (
+                                <>
+                                    <MarkerLayer
+                                        map={map}
+                                        styleRevision={styleRevision}
+                                        jobs={mappableJobs}
+                                        selectedJobId={selectedJobId}
+                                        onSelectJob={focusJob}
+                                        onHoverJob={setHoveredJobId}
+                                    />
+                                    <RouteLayer
+                                        map={map}
+                                        styleRevision={styleRevision}
+                                        routeCoordinates={isNavigating ? routePath : []}
+                                        inactiveRouteCoordinates={isNavigating ? navigationWaypoints : []}
+                                    />
+                                    <LiveTrackingController
+                                        map={map}
+                                        location={currentLocation}
+                                        onPositionFrame={setTrackerPosition}
+                                    />
+                                </>
+                            )}
+                        </MapContainer>
 
-                        {currentLocation ? <Marker position={currentLocation} icon={CURRENT_ICON}><Popup>Your current location</Popup></Marker> : null}
+                        <div className="pointer-events-none absolute left-4 top-20 z-20">
+                            <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-lg backdrop-blur">
+                                <Route className="h-3.5 w-3.5" />
+                                Open Routing Navigation
+                            </div>
+                        </div>
 
-                        {filteredJobs.map((job) => {
-                            const position = [job.latitude, job.longitude];
-                            const markerIcon = job.jobType === 'DUMP' ? DUMP_ICON : PICKUP_ICON;
+                        <div className="pointer-events-none absolute right-4 top-20 z-20">
+                            <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-lg backdrop-blur">
+                                <MapPin className="h-3.5 w-3.5 text-emerald-600" /> {mappableJobs.length} markers
+                            </div>
+                        </div>
 
-                            return (
-                                <Marker key={`${job.jobType}-${job.id}`} position={position} icon={markerIcon} eventHandlers={{ click: () => setSelectedJobId(job.id) }}>
-                                    <Popup>
-                                        <div className="space-y-1 min-w-[180px]">
-                                            <div className="font-semibold">{job.category || 'MIXED'} ({job.jobTypeLabel})</div>
-                                            <div className="text-xs text-gray-600">{job.address}</div>
-                                            <button type="button" onClick={() => startNavigation(job)} className="mt-2 text-xs px-2 py-1 rounded bg-slate-900 text-white">
-                                                Navigate
-                                            </button>
-                                        </div>
-                                    </Popup>
-                                </Marker>
-                            );
-                        })}
-
-                        {isNavigating && routePath.length > 1 ? (
-                            <Polyline positions={routePath} pathOptions={{ color: '#0ea5e9', weight: 5, opacity: 0.85 }} />
+                        {hoveredJob ? (
+                            <div className="absolute bottom-4 left-4 z-20 max-w-sm rounded-xl border border-white/40 bg-white/90 p-3 shadow-xl backdrop-blur">
+                                <p className="text-xs font-semibold text-slate-800">{hoveredJob.category || 'MIXED'} · {hoveredJob.jobTypeLabel}</p>
+                                <p className="text-xs text-slate-600 mt-1 truncate">{hoveredJob.address}</p>
+                            </div>
                         ) : null}
-                    </MapContainer>
-
-                    <div className="pointer-events-none absolute inset-x-0 top-0 p-4 flex items-center justify-between">
-                        <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-lg backdrop-blur">
-                            <Route className="h-3.5 w-3.5" />
-                            OSM Live Navigation
-                        </div>
-                        <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-lg backdrop-blur">
-                            <MapPin className="h-3.5 w-3.5 text-blue-600" /> {filteredJobs.length} markers
-                        </div>
                     </div>
 
                     {selectedJob ? (
-                        <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/30 bg-white/95 shadow-xl backdrop-blur p-4">
+                        <div className="card p-4 border border-slate-200 bg-white">
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2 mb-1">
-                                        <span className={`h-2.5 w-2.5 rounded-full ${selectedJob.jobType === 'DUMP' ? 'bg-orange-500' : 'bg-blue-500'}`} />
+                                        <span className={`h-2.5 w-2.5 rounded-full ${selectedJob.jobType === 'DUMP' ? 'bg-red-500' : 'bg-emerald-500'}`} />
                                         <p className="font-semibold text-slate-900">{selectedJob.category || 'MIXED'} · {selectedJob.jobTypeLabel}</p>
                                     </div>
                                     <p className="text-sm text-slate-600 truncate">{selectedJob.address}</p>
@@ -424,14 +774,51 @@ export default function CollectorMapView() {
                                     </span>
                                 ) : null}
                             </div>
+
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => updateSelectedJobStatus('COMPLETED')}
+                                    disabled={isUpdatingStatus || isSelectedJobClosed}
+                                    className="btn btn-primary text-sm flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <CheckCircle className="h-4 w-4" />
+                                    {selectedJob.jobType === 'DUMP' ? 'Resolve Request' : 'Complete Request'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setCancelReason('');
+                                        setIsCancelModalOpen(true);
+                                    }}
+                                    disabled={isUpdatingStatus || isSelectedJobClosed}
+                                    className="btn btn-secondary text-sm flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <XCircle className="h-4 w-4" /> Cancel Request
+                                </button>
+                            </div>
                         </div>
                     ) : (
-                        <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/30 bg-white/95 shadow-xl backdrop-blur p-4 text-sm text-slate-600 flex items-center gap-2">
+                        <div className="card p-4 text-sm text-slate-600 flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4" /> Select a marker or job card to see navigation actions.
                         </div>
                     )}
                 </div>
             </div>
+
+            <CancellationReasonModal
+                isOpen={isCancelModalOpen}
+                title="Cancel Assignment"
+                subjectLabel={selectedJob?.jobType === 'DUMP' ? 'this dump report' : 'this pickup request'}
+                reason={cancelReason}
+                onReasonChange={setCancelReason}
+                isSubmitting={isUpdatingStatus}
+                onCancel={() => {
+                    setIsCancelModalOpen(false);
+                    setCancelReason('');
+                }}
+                onConfirm={() => updateSelectedJobStatus('CANCELLED', cancelReason)}
+            />
         </div>
     );
 }

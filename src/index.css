@@ -30,6 +30,18 @@
   .input-field {
     @apply w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all;
   }
+
+  .admin-shell {
+    @apply relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-emerald-50/40 shadow-[0_18px_40px_rgba(15,23,42,0.08)];
+  }
+
+  .admin-kpi-card {
+    @apply rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md;
+  }
+
+  .admin-chip {
+    @apply inline-flex items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1 font-semibold text-slate-600;
+  }
 }
 
 @layer utilities {
@@ -61,8 +73,38 @@
     @apply relative overflow-hidden rounded-2xl border border-slate-200/80 shadow-[0_14px_30px_rgba(15,23,42,0.15)];
   }
 
-  .map-tiles-style .leaflet-tile {
-    filter: saturate(1.08) contrast(1.03) brightness(1.02);
+  .maplibre-picker-marker {
+    position: relative;
+    width: 42px;
+    height: 42px;
+  }
+
+  .maplibre-picker-pulse {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: rgba(14, 165, 233, 0.22);
+    animation: tracker-pulse 1.7s ease-out infinite;
+  }
+
+  .maplibre-picker-icon {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 28px;
+    height: 28px;
+    transform: translate(-50%, -50%);
+    border-radius: 10px;
+    background: linear-gradient(145deg, #0ea5e9, #0369a1);
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 8px 18px rgba(2, 132, 199, 0.35);
   }
 
   .map-fade-top {
@@ -145,4 +187,32 @@ body {
 
 body::-webkit-scrollbar {
   display: none;
+}
+
+@keyframes tracker-pulse {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .admin-shell {
+    animation: admin-fade-in 320ms ease-out;
+  }
+}
+
+@keyframes admin-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

@@ -9,6 +9,7 @@ const TITLES = {
     '/citizen/request': `Create Request ${APP_TITLE_SUFFIX}`,
     '/citizen/request-pickup': `Request Pickup ${APP_TITLE_SUFFIX}`,
     '/citizen/pickups': `My Requests ${APP_TITLE_SUFFIX}`,
+    '/citizen/queries': `My Queries ${APP_TITLE_SUFFIX}`,
     '/citizen/report-dump': `Report Dump ${APP_TITLE_SUFFIX}`,
     '/citizen/centres': `Area Activity ${APP_TITLE_SUFFIX}`,
     '/citizen/points': `My Progress ${APP_TITLE_SUFFIX}`,
@@ -16,6 +17,7 @@ const TITLES = {
     '/collector/map': `Live Assignment Map ${APP_TITLE_SUFFIX}`,
     '/admin/dashboard': `Admin Dashboard ${APP_TITLE_SUFFIX}`,
     '/admin/pickups': `Manage Pickups ${APP_TITLE_SUFFIX}`,
+    '/admin/queries': `Support Queries ${APP_TITLE_SUFFIX}`,
     '/admin/centres': `Zone Analytics ${APP_TITLE_SUFFIX}`,
     '/admin/reports': `System Reports ${APP_TITLE_SUFFIX}`,
 };

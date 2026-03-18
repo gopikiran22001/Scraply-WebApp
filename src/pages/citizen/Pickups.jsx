@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import { Clock, CheckCircle, Calendar, XCircle, Package, User, AlertTriangle, MapPin } from 'lucide-react';
 import { getApiErrorMessage } from '../../utils/apiError';
@@ -21,6 +22,7 @@ const STATUS_FILTER_OPTIONS = [
 ];
 
 export default function Pickups() {
+    const navigate = useNavigate();
     const { addToast } = useToast();
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -162,6 +164,11 @@ export default function Pickups() {
                                         <User className="h-4 w-4" />
                                         <span>{request.assignee}</span>
                                     </div>
+                                    {String(request.status || '').toUpperCase() === 'CANCELLED' && request.cancellationReason ? (
+                                        <div className="mt-2 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                                            <span className="font-semibold">Cancellation Reason:</span> {request.cancellationReason}
+                                        </div>
+                                    ) : null}
                                     {request.requestType === 'DUMP' && request.landmark ? (
                                         <div className="mt-1 text-sm text-gray-500">
                                             Landmark: {request.landmark}
@@ -178,6 +185,14 @@ export default function Pickups() {
                             <div className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
                                 {String(request.status || '').replace('_', ' ')}
                             </div>
+
+                            <button
+                                type="button"
+                                className="px-5 py-2 rounded-full text-sm font-medium border border-gray-300 text-gray-800 hover:bg-gray-50 min-w-[130px]"
+                                onClick={() => navigate(`/citizen/queries?requestType=${request.requestType}&requestId=${request.id}`)}
+                            >
+                                Raise Query
+                            </button>
                         </div>
                     ))
                 )}

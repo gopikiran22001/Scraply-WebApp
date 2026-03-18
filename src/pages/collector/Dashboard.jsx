@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
-import { CheckCircle, XCircle, Clock, Truck, AlertTriangle, MapPin, Route as RouteIcon, Filter } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, MapPin, Route as RouteIcon, Filter } from 'lucide-react';
 import { getApiErrorMessage } from '../../utils/apiError';
 import ListboxSelect from '../../components/ListboxSelect';
+import CancellationReasonModal from '../../components/CancellationReasonModal';
 
 const STATUS_OPTIONS = [
     { value: 'ALL', label: 'All Statuses' },
@@ -50,9 +51,12 @@ export default function CollectorDashboard() {
     const [pickups, setPickups] = useState([]);
     const [dumps, setDumps] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [statusFilter, setStatusFilter] = useState('ALL');
+    const [statusFilter, setStatusFilter] = useState('ASSIGNED');
     const [jobTypeFilter, setJobTypeFilter] = useState('ALL');
     const [query, setQuery] = useState('');
+    const [cancelModalJob, setCancelModalJob] = useState(null);
+    const [cancelReason, setCancelReason] = useState('');
+    const [isCancelSubmitting, setIsCancelSubmitting] = useState(false);
 
     const fetchJobs = useCallback(async () => {
         try {
@@ -74,9 +78,14 @@ export default function CollectorDashboard() {
         fetchJobs();
     }, [fetchJobs]);
 
-    const updatePickupStatus = async (pickupId, status) => {
+    const updatePickupStatus = async (pickupId, status, reason) => {
         try {
-            await api.put('/pickups/', { id: pickupId, status });
+            const payload = { id: pickupId, status };
+            if (status === 'CANCELLED') {
+                payload.reason = reason;
+            }
+
+            await api.put('/pickups/', payload);
             addToast(`Pickup marked ${status}`, 'success');
             fetchJobs();
         } catch (error) {
@@ -84,9 +93,14 @@ export default function CollectorDashboard() {
         }
     };
 
-    const updateDumpStatus = async (dumpingId, status) => {
+    const updateDumpStatus = async (dumpingId, status, reason) => {
         try {
-            await api.put('/illegals/', { id: dumpingId, status });
+            const payload = { id: dumpingId, status };
+            if (status === 'CANCELLED') {
+                payload.reason = reason;
+            }
+
+            await api.put('/illegals/', payload);
             addToast(`Dump report marked ${status}`, 'success');
             fetchJobs();
         } catch (error) {
@@ -144,13 +158,49 @@ export default function CollectorDashboard() {
     const pickupCount = jobs.filter((job) => job.jobType === 'PICKUP').length;
     const dumpCount = jobs.filter((job) => job.jobType === 'DUMP').length;
 
-    const updateStatus = async (job, status) => {
-        if (job.jobType === 'PICKUP') {
-            await updatePickupStatus(job.id, status);
+    const updateStatus = async (job, status, reason) => {
+        if (status === 'CANCELLED' && !String(reason || '').trim()) {
+            addToast('Cancellation reason is required', 'error');
             return;
         }
 
-        await updateDumpStatus(job.id, status);
+        if (job.jobType === 'PICKUP') {
+            await updatePickupStatus(job.id, status, reason);
+            return;
+        }
+
+        await updateDumpStatus(job.id, status, reason);
+    };
+
+    const onConfirmCancellation = async (reason) => {
+        if (!cancelModalJob) {
+            return;
+        }
+
+        const trimmedReason = String(reason || '').trim();
+        if (!trimmedReason) {
+            addToast('Cancellation reason is required', 'error');
+            return;
+        }
+
+        setIsCancelSubmitting(true);
+        try {
+            await updateStatus(cancelModalJob, 'CANCELLED', trimmedReason);
+            setCancelModalJob(null);
+            setCancelReason('');
+        } finally {
+            setIsCancelSubmitting(false);
+        }
+    };
+
+    const openCancelModal = (job) => {
+        setCancelModalJob(job);
+        setCancelReason('');
+    };
+
+    const closeCancelModal = () => {
+        setCancelModalJob(null);
+        setCancelReason('');
     };
 
     if (loading) {
@@ -264,25 +314,17 @@ export default function CollectorDashboard() {
 
                                     {!isClosed ? (
                                         <div className="flex flex-wrap gap-2 mt-4">
-                                            {String(job.status || '').toUpperCase() === 'ASSIGNED' ? (
-                                                <button onClick={() => updateStatus(job, 'IN_PROGRESS')} className="btn btn-secondary text-sm flex items-center gap-1">
-                                                    <Clock className="h-4 w-4" /> Start Job
-                                                </button>
-                                            ) : null}
-
                                             <button onClick={() => updateStatus(job, 'COMPLETED')} className="btn btn-primary text-sm flex items-center gap-1">
                                                 <CheckCircle className="h-4 w-4" /> {job.jobType === 'DUMP' ? 'Resolve' : 'Complete'}
                                             </button>
 
-                                            <button onClick={() => updateStatus(job, 'CANCELLED')} className="btn btn-secondary text-sm flex items-center gap-1">
+                                            <button onClick={() => openCancelModal(job)} className="btn btn-secondary text-sm flex items-center gap-1">
                                                 <XCircle className="h-4 w-4" /> Cancel
                                             </button>
 
-                                            {job.jobType === 'PICKUP' ? (
-                                                <Link to={`/collector/route/${job.id}`} className="btn btn-secondary text-sm flex items-center gap-1">
-                                                    <RouteIcon className="h-4 w-4" /> Open Route
-                                                </Link>
-                                            ) : null}
+                                            <Link to={`/collector/map?jobId=${encodeURIComponent(job.id)}&navigate=1`} className="btn btn-secondary text-sm flex items-center gap-1">
+                                                <RouteIcon className="h-4 w-4" /> Open Route
+                                            </Link>
                                         </div>
                                     ) : null}
                                 </div>
@@ -295,6 +337,17 @@ export default function CollectorDashboard() {
             <div className="card p-4 mt-8 text-sm text-gray-500 flex items-center gap-2">
                 <Clock className="h-4 w-4" /> Status updates are saved immediately to the backend.
             </div>
+
+            <CancellationReasonModal
+                isOpen={Boolean(cancelModalJob)}
+                title="Cancel Assignment"
+                subjectLabel={cancelModalJob?.jobType === 'DUMP' ? 'this dump report' : 'this pickup request'}
+                reason={cancelReason}
+                onReasonChange={setCancelReason}
+                isSubmitting={isCancelSubmitting}
+                onCancel={closeCancelModal}
+                onConfirm={onConfirmCancellation}
+            />
         </div>
     );
 }

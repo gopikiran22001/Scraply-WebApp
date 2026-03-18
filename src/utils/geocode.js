@@ -53,15 +53,12 @@ export async function reverseGeocodeWithPostcode(latitude, longitude) {
     }
 
     const data = await response.json();
-    
-    // Try multiple ways to get postcode
     let postcode = data?.address?.postcode;
-    
-    // If not found, try to extract from display name
+
     if (!postcode) {
         postcode = extractPinCodeFromAddress(data?.display_name || '');
     }
-    
+
     return {
         address: data?.display_name || '',
         postcode: postcode || ''
@@ -108,7 +105,6 @@ export async function searchAddress(query, limit = 5) {
 export function extractPinCodeFromAddress(address) {
     const normalizedAddress = String(address || '');
 
-    // Prefer 6-digit postcodes, then fallback to 5-digit postcodes.
     const sixDigitMatch = normalizedAddress.match(/\b(\d{6})\b/);
     if (sixDigitMatch?.[1]) {
         return sixDigitMatch[1];
