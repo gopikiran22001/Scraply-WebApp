@@ -178,15 +178,14 @@
   }
 }
 
-body {
-  -ms-overflow-style: none;
-  /* IE and Edge */
-  scrollbar-width: none;
-  /* Firefox */
+/* Hide scrollbars globally while keeping scroll functionality */
+* {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;     /* Firefox */
 }
 
-body::-webkit-scrollbar {
-  display: none;
+*::-webkit-scrollbar {
+  display: none;             /* Chrome, Safari, Opera */
 }
 
 @keyframes tracker-pulse {
