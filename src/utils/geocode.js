@@ -11,13 +11,43 @@ function getSearchGeocodeBaseUrl() {
     return configured || DEFAULT_SEARCH_GEOCODE_URL;
 }
 
+function isPhotonAPI(urlStr) {
+    try {
+        return new URL(urlStr).hostname.includes('photon');
+    } catch {
+        return false;
+    }
+}
+
+function formatPhotonAddress(props) {
+    if (!props) return '';
+    return [
+        props.name,
+        props.housenumber,
+        props.street,
+        props.locality,
+        props.district,
+        props.city,
+        props.county,
+        props.state,
+        props.postcode,
+        props.country
+    ]
+        .filter(Boolean)
+        .join(', ');
+}
+
 export async function reverseGeocode(latitude, longitude) {
     const baseUrl = getReverseGeocodeBaseUrl();
     const url = new URL(baseUrl);
-    url.searchParams.set('format', 'json');
+    const isPhoton = isPhotonAPI(baseUrl);
+
+    if (!isPhoton) {
+        url.searchParams.set('format', 'json');
+        url.searchParams.set('addressdetails', '1');
+    }
     url.searchParams.set('lat', String(latitude));
     url.searchParams.set('lon', String(longitude));
-    url.searchParams.set('addressdetails', '1');
 
     const response = await fetch(url.toString(), {
         headers: {
@@ -30,17 +60,27 @@ export async function reverseGeocode(latitude, longitude) {
     }
 
     const data = await response.json();
+    
+    if (isPhoton) {
+        const props = data.features?.[0]?.properties;
+        return formatPhotonAddress(props);
+    }
+    
     return data?.display_name || '';
 }
 
 export async function reverseGeocodeWithPostcode(latitude, longitude) {
     const baseUrl = getReverseGeocodeBaseUrl();
     const url = new URL(baseUrl);
-    url.searchParams.set('format', 'json');
+    const isPhoton = isPhotonAPI(baseUrl);
+
+    if (!isPhoton) {
+        url.searchParams.set('format', 'json');
+        url.searchParams.set('addressdetails', '1');
+        url.searchParams.set('zoom', '18');
+    }
     url.searchParams.set('lat', String(latitude));
     url.searchParams.set('lon', String(longitude));
-    url.searchParams.set('addressdetails', '1');
-    url.searchParams.set('zoom', '18');
 
     const response = await fetch(url.toString(), {
         headers: {
@@ -53,14 +93,24 @@ export async function reverseGeocodeWithPostcode(latitude, longitude) {
     }
 
     const data = await response.json();
-    let postcode = data?.address?.postcode;
+    let address = '';
+    let postcode = '';
+
+    if (isPhoton) {
+        const props = data.features?.[0]?.properties;
+        address = formatPhotonAddress(props);
+        postcode = props?.postcode;
+    } else {
+        address = data?.display_name || '';
+        postcode = data?.address?.postcode;
+    }
 
     if (!postcode) {
-        postcode = extractPinCodeFromAddress(data?.display_name || '');
+        postcode = extractPinCodeFromAddress(address);
     }
 
     return {
-        address: data?.display_name || '',
+        address: address || '',
         postcode: postcode || ''
     };
 }
@@ -73,10 +123,14 @@ export async function searchAddress(query, limit = 5) {
 
     const baseUrl = getSearchGeocodeBaseUrl();
     const url = new URL(baseUrl);
-    url.searchParams.set('format', 'json');
+    const isPhoton = isPhotonAPI(baseUrl);
+
+    if (!isPhoton) {
+        url.searchParams.set('format', 'json');
+        url.searchParams.set('addressdetails', '1');
+    }
     url.searchParams.set('q', sanitizedQuery);
     url.searchParams.set('limit', String(limit));
-    url.searchParams.set('addressdetails', '1');
 
     const response = await fetch(url.toString(), {
         headers: {
@@ -89,6 +143,18 @@ export async function searchAddress(query, limit = 5) {
     }
 
     const data = await response.json();
+
+    if (isPhoton) {
+        if (!Array.isArray(data.features)) return [];
+        return data.features
+            .map((f) => ({
+                address: formatPhotonAddress(f.properties),
+                latitude: Number(f.geometry?.coordinates?.[1]),
+                longitude: Number(f.geometry?.coordinates?.[0]),
+            }))
+            .filter((item) => item.address && Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
+    }
+
     if (!Array.isArray(data)) {
         return [];
     }
