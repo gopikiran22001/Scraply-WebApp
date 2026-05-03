@@ -13,9 +13,9 @@ import {
 
 export default function Awareness() {
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-12 space-y-12">
             <div className="text-center max-w-3xl mx-auto">
-                <h1 className="text-4xl font-bold text-gray-900 mb-4">Waste Segregation and Responsible Disposal Guide</h1>
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-4">Waste Segregation and Responsible Disposal Guide</h1>
                 <p className="text-xl text-gray-600">
                     Correct segregation at home is the fastest way to improve recycling quality, reduce contamination, and keep neighborhoods cleaner.
                 </p>
@@ -91,7 +91,7 @@ export default function Awareness() {
             </section>
 
             <div className="grid md:grid-cols-2 gap-8">
-                <div className="card p-8 border-t-4 border-t-green-500">
+                <div className="card p-6 sm:p-8 border-t-4 border-t-green-500">
                     <h2 className="text-2xl font-bold text-green-700 mb-6 flex items-center gap-2">
                         <CheckCircle className="h-6 w-6" /> Do's
                     </h2>
@@ -119,7 +119,7 @@ export default function Awareness() {
                     </ul>
                 </div>
 
-                <div className="card p-8 border-t-4 border-t-red-500">
+                <div className="card p-6 sm:p-8 border-t-4 border-t-red-500">
                     <h2 className="text-2xl font-bold text-red-700 mb-6 flex items-center gap-2">
                         <XCircle className="h-6 w-6" /> Don'ts
                     </h2>

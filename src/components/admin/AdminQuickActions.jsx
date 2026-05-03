@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Bolt, Flag, NotebookPen, UserPlus } from 'lucide-react';
 import ListboxSelect from '../ListboxSelect';
+import ComboboxSelect from '../ComboboxSelect';
 
 const ACTIONS_STORAGE_KEY = 'scraply_admin_quick_actions';
 
@@ -50,21 +51,39 @@ export default function AdminQuickActions({
     const [flagReason, setFlagReason] = useState('');
 
     const openRequests = useMemo(() => {
-        const pickupItems = (Array.isArray(pickups) ? pickups : []).map((item) => ({
-            value: String(item.id),
-            label: `PICKUP #${String(item.id).slice(-6)} - ${item.category || 'UNKNOWN'}`,
-            type: 'PICKUP',
-            status: String(item.status || '').toUpperCase(),
-        }));
+        const pickupItems = (Array.isArray(pickups) ? pickups : []).map((item) => {
+            const requestId = String(item.id || '').trim();
+            const displayId = requestId ? requestId.slice(-6) : 'NODATA';
+            return {
+                value: requestId || String(Math.random()),
+                label: `PICKUP #${displayId} - ${item.category || 'UNKNOWN'}`,
+                type: 'PICKUP',
+                status: String(item.status || '').toUpperCase(),
+                hasValidId: !!requestId,
+            };
+        });
 
-        const reportItems = (Array.isArray(reports) ? reports : []).map((item) => ({
-            value: String(item.id),
-            label: `DUMP #${String(item.id).slice(-6)} - ${item.address || 'N/A'}`,
-            type: 'REPORT',
-            status: String(item.status || '').toUpperCase(),
-        }));
+        const reportItems = (Array.isArray(reports) ? reports : []).map((item) => {
+            const requestId = String(item.id || '').trim();
+            const displayId = requestId ? requestId.slice(-6) : 'NODATA';
+            return {
+                value: requestId || String(Math.random()),
+                label: `DUMP #${displayId} - ${item.address || 'N/A'}`,
+                type: 'REPORT',
+                status: String(item.status || '').toUpperCase(),
+                hasValidId: !!requestId,
+            };
+        });
 
-        return [...pickupItems, ...reportItems].filter((item) => ['REQUESTED', 'ASSIGNED', 'IN_PROGRESS'].includes(item.status));
+        const allRequests = [...pickupItems, ...reportItems].filter((item) => ['REQUESTED', 'ASSIGNED', 'IN_PROGRESS'].includes(item.status));
+        
+        // Log items without valid IDs for debugging
+        const invalidItems = allRequests.filter(item => !item.hasValidId);
+        if (invalidItems.length > 0) {
+            console.warn('[AdminQuickActions] Found requests without valid IDs:', invalidItems);
+        }
+        
+        return allRequests;
     }, [pickups, reports]);
 
     const assignRequestOptions = useMemo(() => {
@@ -172,14 +191,14 @@ export default function AdminQuickActions({
     ];
 
     return (
-        <div className={`card p-5 border border-slate-200 h-full ${className}`}>
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <Bolt className="h-4 w-4 text-primary-600" /> Quick Create Actions
+        <div className={`card p-6 border border-slate-200 h-full bg-gradient-to-br from-slate-50 to-white flex flex-col ${className}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <Bolt className="h-5 w-5 text-primary-600" /> Quick Create Actions
                 </h3>
             </div>
 
-            <div className="mb-4 flex flex-wrap gap-2">
+            <div className="mb-5 flex flex-wrap gap-2">
                 {tabs.map((tab) => {
                     const Icon = tab.icon;
                     const active = activeTab === tab.value;
@@ -187,13 +206,13 @@ export default function AdminQuickActions({
                         <button
                             key={tab.value}
                             type="button"
-                            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${active
-                                ? 'border-primary-500 bg-primary-50 text-primary-700'
-                                : 'border-slate-200 bg-white text-slate-600'
+                            className={`inline-flex items-center gap-2 rounded-full border-2 px-4 py-2 text-sm font-semibold transition-all ${active
+                                ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-sm'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                                 }`}
                             onClick={() => setActiveTab(tab.value)}
                         >
-                            <Icon className="h-3.5 w-3.5" /> {tab.label}
+                            <Icon className="h-4 w-4" /> {tab.label}
                         </button>
                     );
                 })}
@@ -220,23 +239,26 @@ export default function AdminQuickActions({
                         options={assignRequestOptions}
                         placeholder="Select request"
                     />
-                    <ListboxSelect
+                    <ComboboxSelect
                         label="Picker"
                         value={assignPickerId}
                         onChange={setAssignPickerId}
                         options={pickerOptions}
-                        placeholder="Select picker"
+                        placeholder="Search picker..."
+                        direction="up"
                     />
                     <div className="text-xs text-slate-500 flex items-center">
                         {pickerOptions.length > 0 ? `${pickerOptions.length} pickers available` : 'No pickers found in current data'}
                     </div>
                     <textarea
-                        className="input-field md:col-span-2 min-h-[84px]"
+                        className="input-field md:col-span-2 min-h-[88px] resize-none"
                         placeholder="Assignment note (optional)"
                         value={assignNote}
                         onChange={(event) => setAssignNote(event.target.value)}
                     />
-                    <button type="submit" className="btn btn-primary md:col-span-2">Create Assignment</button>
+                    <button type="submit" className="btn btn-primary md:col-span-2 py-2.5 font-semibold shadow-sm hover:shadow-md transition-shadow">
+                        Create Assignment
+                    </button>
                 </form>
             ) : null}
 
@@ -267,12 +289,14 @@ export default function AdminQuickActions({
                     />
                     <div></div>
                     <textarea
-                        className="input-field md:col-span-2 min-h-[84px]"
+                        className="input-field md:col-span-2 min-h-[88px] resize-none"
                         placeholder="Centre note"
                         value={centreNote}
                         onChange={(event) => setCentreNote(event.target.value)}
                     />
-                    <button type="submit" className="btn btn-primary md:col-span-2">Create Centre Note</button>
+                    <button type="submit" className="btn btn-primary md:col-span-2 py-2.5 font-semibold shadow-sm hover:shadow-md transition-shadow">
+                        Create Centre Note
+                    </button>
                 </form>
             ) : null}
 
@@ -309,29 +333,16 @@ export default function AdminQuickActions({
                     />
                     <div></div>
                     <textarea
-                        className="input-field md:col-span-2 min-h-[84px]"
+                        className="input-field md:col-span-2 min-h-[88px] resize-none"
                         placeholder="Escalation reason"
                         value={flagReason}
                         onChange={(event) => setFlagReason(event.target.value)}
                     />
-                    <button type="submit" className="btn btn-primary md:col-span-2">Create Escalation Flag</button>
+                    <button type="submit" className="btn btn-primary md:col-span-2 py-2.5 font-semibold shadow-sm hover:shadow-md transition-shadow">
+                        Create Escalation Flag
+                    </button>
                 </form>
             ) : null}
-
-            <div className="mt-5 border-t border-slate-100 pt-4">
-                <p className="text-sm font-semibold text-slate-800 mb-2">Recent Quick Actions</p>
-                <div className="space-y-2 max-h-48 overflow-auto no-scrollbar">
-                    {actions.length === 0 ? (
-                        <p className="text-sm text-slate-500">No actions yet.</p>
-                    ) : actions.map((action, index) => (
-                        <div key={`${action.createdAt}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                            <p className="text-sm font-medium text-slate-800">{action.title}</p>
-                            <p className="text-xs text-slate-600 mt-0.5">{action.meta}</p>
-                            <p className="text-[11px] text-slate-500 mt-1">{new Date(action.createdAt).toLocaleString()}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
         </div>
     );
 }

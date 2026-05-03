@@ -35,29 +35,30 @@ export default function Route() {
     }
 
     return (
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <Link to="/collector/dashboard" className="flex items-center gap-2 text-gray-500 hover:text-gray-900 mb-6">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+            <Link to="/collector/dashboard" className="flex items-center gap-2 text-primary-600 hover:text-primary-700 font-medium mb-6 transition-colors">
                 <ArrowLeft className="h-4 w-4" /> Back to Dashboard
             </Link>
 
-            <div className="card p-6 mb-6">
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">Navigation to Job</h1>
-                <p className="text-gray-600">Category: {pickup.category}</p>
+            <div className="card p-6 mb-6 bg-gradient-to-br from-slate-50 to-white border-slate-200">
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">Navigation to Job</h1>
+                <p className="text-slate-600 font-medium">Category: <span className="font-bold text-slate-900">{pickup.category}</span></p>
             </div>
 
-            <div className="relative border-l-2 border-gray-200 ml-4 space-y-8 pb-8">
+            <div className="relative border-l-4 border-primary-400 ml-4 space-y-6 pb-8">
                 <div className="relative pl-8">
-                    <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-primary-500 ring-4 ring-white"></div>
-                    <h3 className="font-bold text-gray-900">Start: Current Location</h3>
+                    <div className="absolute -left-[11px] top-1 w-5 h-5 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 ring-4 ring-white shadow-md"></div>
+                    <h3 className="font-bold text-slate-900 text-lg">Start: Current Location</h3>
+                    <p className="text-sm text-slate-500 mt-1">Your current position</p>
                 </div>
 
                 <div className="relative pl-8">
-                    <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-500 ring-4 ring-white"></div>
-                    <h3 className="font-bold text-gray-900">Destination</h3>
-                    <p className="text-gray-500 text-sm mt-1">
-                        {pickup.address || "Address not available"}
+                    <div className="absolute -left-[11px] top-1 w-5 h-5 rounded-full bg-gradient-to-br from-red-500 to-red-600 ring-4 ring-white shadow-md"></div>
+                    <h3 className="font-bold text-slate-900 text-lg">Destination</h3>
+                    <p className="text-slate-600 text-sm mt-2">
+                        📍 {pickup.address || "Address not available"}
                     </p>
-                    <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                    <div className="mt-4 p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border-2 border-blue-200">
                         <p className="text-sm font-medium text-gray-700">Note:</p>
                         <p className="text-sm text-gray-500">Description: {pickup.description}</p>
                     </div>

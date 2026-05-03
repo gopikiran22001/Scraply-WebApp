@@ -12,7 +12,7 @@
 
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 active:scale-95;
+    @apply px-4 py-2.5 sm:py-2 rounded-lg font-medium transition-all duration-200 active:scale-95 text-sm sm:text-base min-h-[44px] sm:min-h-[40px] flex items-center justify-center;
   }
 
   .btn-primary {
@@ -28,11 +28,11 @@
   }
 
   .input-field {
-    @apply w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all;
+    @apply w-full px-4 py-2.5 sm:py-3 rounded-lg border-2 border-slate-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all bg-white hover:border-slate-300 text-base sm:text-sm;
   }
 
   .admin-shell {
-    @apply relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-emerald-50/40 shadow-[0_18px_40px_rgba(15,23,42,0.08)];
+    @apply relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-emerald-50/40;
   }
 
   .admin-kpi-card {
@@ -176,6 +176,27 @@
     box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
     opacity: 0;
   }
+}
+
+/* Custom scrollbar for dropdowns */
+.dropdown-scrollbar::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+
+.dropdown-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dropdown-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 20px;
+}
+
+.dropdown-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+  -ms-overflow-style: auto;
 }
 
 /* Hide scrollbars globally while keeping scroll functionality */

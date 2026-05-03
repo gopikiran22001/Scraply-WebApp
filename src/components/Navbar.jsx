@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Recycle, User, LogOut, ChevronDown } from 'lucide-react';
+import { Recycle, User, LogOut, ChevronDown, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
     const location = useLocation();
     const { user, logout } = useAuth();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const menuRef = useRef(null);
     const closeTimerRef = useRef(null);
     const role = String(user?.role || '').toUpperCase();
@@ -40,6 +41,7 @@ export default function Navbar() {
 
     useEffect(() => {
         setIsMenuOpen(false);
+        setIsMobileMenuOpen(false);
     }, [location.pathname]);
 
     useEffect(() => {
@@ -69,18 +71,31 @@ export default function Navbar() {
         }`;
 
     return (
-        <nav className="bg-white border-b border-gray-100 sticky top-0 z-50 backdrop-blur-lg bg-white/80">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-md">
+            <div className="w-full px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between h-16">
-                    <div className="flex items-center">
+                    <div className="flex items-center gap-3">
                         <Link to="/" className="flex items-center gap-2">
                             <div className="bg-primary-600 p-2 rounded-lg">
-                                <Recycle className="h-6 w-6 text-white" />
+                                <Recycle className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                             </div>
-                            <span className="text-xl font-bold bg-gradient-to-r from-primary-700 to-primary-500 bg-clip-text text-transparent">
+                            <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-primary-700 to-primary-500 bg-clip-text text-transparent hidden sm:inline">
                                 Scraply
                             </span>
                         </Link>
+
+                        {/* Mobile Menu Button */}
+                        <button
+                            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                            className="md:hidden p-2 text-gray-600 hover:text-primary-600 transition-colors"
+                            title="Toggle Menu"
+                        >
+                            {isMobileMenuOpen ? (
+                                <X className="h-6 w-6" />
+                            ) : (
+                                <Menu className="h-6 w-6" />
+                            )}
+                        </button>
                     </div>
 
                     {/* Desktop Menu */}
@@ -153,10 +168,79 @@ export default function Navbar() {
                                 </div>
                             </div>
                         )}
+                    </div>
 
-
+                    {/* Mobile Profile Icon */}
+                    <div className="md:hidden">
+                        {!user ? (
+                            <Link to="/login" className="btn btn-primary py-1.5 px-3 text-sm">Sign In</Link>
+                        ) : (
+                            <button
+                                type="button"
+                                className="p-2 rounded-full text-gray-600 hover:text-primary-600 hover:bg-gray-100 transition-colors"
+                                onClick={() => setIsMenuOpen((prev) => !prev)}
+                                title="Profile"
+                            >
+                                <User className="h-5 w-5" />
+                            </button>
+                        )}
                     </div>
                 </div>
+
+                {/* Mobile Menu */}
+                {isMobileMenuOpen && (
+                    <div className="md:hidden border-t border-gray-200 py-4 space-y-2">
+                        <Link to="/awareness" onClick={() => setIsMobileMenuOpen(false)} className={`block px-4 py-2 rounded text-sm font-medium transition-colors ${location.pathname === '/awareness' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>Awareness</Link>
+
+                        {isCitizen && (
+                            <>
+                                <Link to="/citizen/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={`block px-4 py-2 rounded text-sm font-medium transition-colors ${location.pathname === '/citizen/dashboard' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>Dashboard</Link>
+                                <Link to="/citizen/request" onClick={() => setIsMobileMenuOpen(false)} className={`block px-4 py-2 rounded text-sm font-medium transition-colors ${location.pathname === '/citizen/request' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>Create Request</Link>
+                                <Link to="/citizen/queries" onClick={() => setIsMobileMenuOpen(false)} className={`block px-4 py-2 rounded text-sm font-medium transition-colors ${location.pathname === '/citizen/queries' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>Queries</Link>
+                            </>
+                        )}
+
+                        {isCollector && (
+                            <>
+                                <Link to="/collector/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={`block px-4 py-2 rounded text-sm font-medium transition-colors ${location.pathname === '/collector/dashboard' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>Dashboard</Link>
+                                <Link to="/collector/map" onClick={() => setIsMobileMenuOpen(false)} className={`block px-4 py-2 rounded text-sm font-medium transition-colors ${location.pathname === '/collector/map' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>Live Map</Link>
+                            </>
+                        )}
+
+                        {isAdmin && (
+                            <>
+                                <Link to="/admin/dashboard" onClick={() => setIsMobileMenuOpen(false)} className={`block px-4 py-2 rounded text-sm font-medium transition-colors ${location.pathname === '/admin/dashboard' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>Dashboard</Link>
+                                <Link to="/admin/pickups" onClick={() => setIsMobileMenuOpen(false)} className={`block px-4 py-2 rounded text-sm font-medium transition-colors ${location.pathname === '/admin/pickups' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>Requests</Link>
+                                <Link to="/admin/queries" onClick={() => setIsMobileMenuOpen(false)} className={`block px-4 py-2 rounded text-sm font-medium transition-colors ${location.pathname === '/admin/queries' ? 'text-primary-600 bg-primary-50' : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'}`}>Queries</Link>
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {/* Mobile Profile Dropdown */}
+                {isMobileMenuOpen && user && (
+                    <div className="md:hidden border-t border-gray-200 py-4 space-y-2">
+                        <Link to="/profile" onClick={() => setIsMobileMenuOpen(false)} className="block px-4 py-2 rounded text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-gray-50">Profile</Link>
+                        {isCitizen && (
+                            <>
+                                <Link to="/citizen/pickups" onClick={() => setIsMobileMenuOpen(false)} className="block px-4 py-2 rounded text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-gray-50">My Requests</Link>
+                                <Link to="/citizen/queries" onClick={() => setIsMobileMenuOpen(false)} className="block px-4 py-2 rounded text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-gray-50">My Queries</Link>
+                                <Link to="/citizen/points" onClick={() => setIsMobileMenuOpen(false)} className="block px-4 py-2 rounded text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-gray-50">Points</Link>
+                            </>
+                        )}
+                        {isAdmin && (
+                            <>
+                                <Link to="/admin/pickers" onClick={() => setIsMobileMenuOpen(false)} className="block px-4 py-2 rounded text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-gray-50">Pickers</Link>
+                                <Link to="/admin/centres" onClick={() => setIsMobileMenuOpen(false)} className="block px-4 py-2 rounded text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-gray-50">Centres</Link>
+                                <Link to="/admin/reports" onClick={() => setIsMobileMenuOpen(false)} className="block px-4 py-2 rounded text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-gray-50">Reports</Link>
+                            </>
+                        )}
+                        <button onClick={handleLogout} className="w-full text-left px-4 py-2 rounded text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-2">
+                            <LogOut className="h-4 w-4" />
+                            Log Out
+                        </button>
+                    </div>
+                )}
             </div>
         </nav>
     );

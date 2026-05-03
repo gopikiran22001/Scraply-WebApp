@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import ListboxSelect from '../../components/ListboxSelect';
+import ComboboxSelect from '../../components/ComboboxSelect';
 import { getApiErrorMessage } from '../../utils/apiError';
-import { Search, RefreshCw, SlidersHorizontal, CheckCheck, ArrowUpDown } from 'lucide-react';
+import { Search, RefreshCw, SlidersHorizontal, CheckCheck, ArrowUpDown, CalendarRange } from 'lucide-react';
 import AdminPagination from '../../components/admin/AdminPagination';
 import AdminDonutChart from '../../components/admin/AdminDonutChart';
 import AdminBarListChart from '../../components/admin/AdminBarListChart';
-import { format, subDays } from 'date-fns';
+import { format, subDays, startOfMonth } from 'date-fns';
 
 const STATUS_OPTIONS = [
     { value: 'REQUESTED', label: 'REQUESTED' },
@@ -32,7 +33,8 @@ export default function AdminPickups() {
     const [selectedKeys, setSelectedKeys] = useState([]);
     const [bulkStatus, setBulkStatus] = useState('ASSIGNED');
     const [assignPickerId, setAssignPickerId] = useState('');
-    const [startDate, setStartDate] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+    // Set date range to current month (1st of month to today)
+    const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [sortConfig, setSortConfig] = useState({ key: 'activityDate', direction: 'desc' });
     const [page, setPage] = useState(1);
@@ -48,17 +50,35 @@ export default function AdminPickups() {
         }
 
         try {
-            const [{ data: pickupsData }, { data: dumpsData }, { data: pickersData }] = await Promise.all([
+            console.log('[Pickups] Fetching data from APIs...');
+            const [pickupsResponse, dumpsResponse, pickersResponse] = await Promise.all([
                 api.get('/pickups/'),
                 api.get('/illegals/'),
                 api.get('/auth/pickers'),
             ]);
+
+            const pickupsData = pickupsResponse?.data;
+            const dumpsData = dumpsResponse?.data;
+            const pickersData = pickersResponse?.data;
+
+            console.log('[Pickups] API Responses received:');
+            console.log('  /pickups/ response type:', typeof pickupsData, 'is array:', Array.isArray(pickupsData), 'length:', Array.isArray(pickupsData) ? pickupsData.length : 'N/A');
+            console.log('  /illegals/ response type:', typeof dumpsData, 'is array:', Array.isArray(dumpsData), 'length:', Array.isArray(dumpsData) ? dumpsData.length : 'N/A');
+            console.log('  /auth/pickers response type:', typeof pickersData, 'is array:', Array.isArray(pickersData), 'length:', Array.isArray(pickersData) ? pickersData.length : 'N/A');
+
+            if (pickupsData && !Array.isArray(pickupsData)) {
+                console.log('  Raw /pickups/ response:', pickupsData);
+            }
+            if (dumpsData && !Array.isArray(dumpsData)) {
+                console.log('  Raw /illegals/ response:', dumpsData);
+            }
 
             const pickupItems = (Array.isArray(pickupsData) ? pickupsData : []).map((item) => ({
                 ...item,
                 requestType: 'PICKUP',
                 activityDate: item.requestedAt || item.createdAt || item.updatedAt || null,
                 requestLabel: 'Pickup',
+                displayId: String(item.id || 'NODATA').slice(-6),
             }));
 
             const dumpItems = (Array.isArray(dumpsData) ? dumpsData : []).map((item) => ({
@@ -66,11 +86,36 @@ export default function AdminPickups() {
                 requestType: 'DUMP',
                 activityDate: item.reportedAt || item.createdAt || item.updatedAt || null,
                 requestLabel: 'Dump',
+                displayId: String(item.id || 'NODATA').slice(-6),
             }));
 
-            setRequests([...pickupItems, ...dumpItems]);
+            const allRequests = [...pickupItems, ...dumpItems];
+            setRequests(allRequests);
             setPickers(Array.isArray(pickersData) ? pickersData : []);
+            
+            console.log('[Pickups] Parsed Data:');
+            console.log(`  Pickups: ${pickupItems.length} items`);
+            console.log(`  Dumps: ${dumpItems.length} items`);
+            console.log(`  Total: ${allRequests.length} items`);
+            
+            if (allRequests.length > 0) {
+                console.log('  First request sample:', {
+                    id: allRequests[0].id,
+                    type: allRequests[0].requestType,
+                    status: allRequests[0].status,
+                });
+                const invalidIds = allRequests.filter(r => !r.id);
+                if (invalidIds.length > 0) {
+                    console.warn(`  ⚠️ ${invalidIds.length} requests have missing IDs`);
+                }
+            } else {
+                console.warn('[Pickups] ⚠️ No requests returned - check if database has data');
+            }
         } catch (error) {
+            console.error('[Pickups] API Error:', error);
+            console.error('  Error message:', error.message);
+            console.error('  Error response:', error.response?.data);
+            console.error('  Error status:', error.response?.status);
             addToast(getApiErrorMessage(error, 'Failed to load pickups and dumps'), 'error');
             setRequests([]);
             setPickers([]);
@@ -349,11 +394,11 @@ export default function AdminPickups() {
     }
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
             <div className="admin-shell p-6 sm:p-8">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-900">Pickups and Dumps Operations</h1>
+                        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Pickups and Dumps Operations</h1>
                         <p className="text-slate-600 mt-1">Track pickup and dump requests, apply filters, and bulk-update workflow states.</p>
                     </div>
                     <button
@@ -407,27 +452,69 @@ export default function AdminPickups() {
                     />
                 </div>
 
-                <div className="grid gap-3 lg:grid-cols-4 mb-4">
-                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                        <p className="text-xs text-slate-500 mb-1">From</p>
-                        <input
-                            type="date"
-                            value={startDate}
-                            onChange={(event) => setStartDate(event.target.value)}
-                            className="w-full text-sm text-slate-700 outline-none"
-                        />
+                <div className="card p-5 border border-slate-200 bg-gradient-to-br from-slate-50 to-white mb-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <CalendarRange className="h-5 w-5 text-primary-600" />
+                        <h3 className="font-semibold text-slate-900">Filter by Date Range</h3>
                     </div>
-                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                        <p className="text-xs text-slate-500 mb-1">To</p>
-                        <input
-                            type="date"
-                            value={endDate}
-                            onChange={(event) => setEndDate(event.target.value)}
-                            className="w-full text-sm text-slate-700 outline-none"
-                        />
-                    </div>
-                    <div className="lg:col-span-2 flex items-center text-xs text-slate-500">
-                        Date range applies to table rows and summary count.
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1.5">From</label>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(event) => setStartDate(event.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1.5">To</label>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(event) => setEndDate(event.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1.5">Quick Select</label>
+                            <div className="flex gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setEndDate(format(new Date(), 'yyyy-MM-dd'));
+                                        setStartDate(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
+                                    }}
+                                    className="flex-1 px-2 py-2 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                                    title="Last 7 days"
+                                >
+                                    7d
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setEndDate(format(new Date(), 'yyyy-MM-dd'));
+                                        setStartDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+                                    }}
+                                    className="flex-1 px-2 py-2 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                                    title="Last 30 days"
+                                >
+                                    30d
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setEndDate(format(new Date(), 'yyyy-MM-dd'));
+                                        setStartDate(format(subDays(new Date(), 90), 'yyyy-MM-dd'));
+                                    }}
+                                    className="flex-1 px-2 py-2 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                                    title="Last 90 days"
+                                >
+                                    90d
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -448,12 +535,12 @@ export default function AdminPickups() {
                             </div>
                             <div className="flex-1">
                                 <label className="text-xs text-slate-600 block mb-1">Picker <span className="text-red-500">*</span></label>
-                                <ListboxSelect
+                                <ComboboxSelect
                                     value={assignPickerId}
                                     onChange={setAssignPickerId}
                                     options={pickerOptions}
                                     className="w-full"
-                                    placeholder="Select picker (required for ASSIGNED)"
+                                    placeholder="Search picker..."
                                 />
                             </div>
                             <div className="flex-1">
@@ -533,7 +620,11 @@ export default function AdminPickups() {
                                                 aria-label={`Select ${String(request.requestLabel || 'request').toLowerCase()} ${request.id}`}
                                             />
                                         </td>
-                                        <td className="px-3 py-3 font-medium text-slate-900 text-xs">#{String(request.id || '').slice(-6)}</td>
+                                        <td className="px-3 py-3 font-medium text-slate-900 text-xs">
+                                            {request.id 
+                                                ? `#${request.displayId}` 
+                                                : <span className="text-red-600 font-semibold">❌ NO ID</span>}
+                                        </td>
                                         <td className="px-3 py-3">
                                             <span className={`px-2 py-0.5 rounded text-xs font-medium ${request.requestType === 'DUMP' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
                                                 {request.requestType === 'DUMP' ? 'Dump' : 'Pickup'}

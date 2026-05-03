@@ -52,7 +52,7 @@ export default function AdminPickers() {
     };
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
             <h1 className="text-2xl font-bold text-slate-900 mb-6">Pickers Management</h1>
             <div className="card overflow-hidden mb-8">
                 <div className="overflow-x-auto no-scrollbar">
@@ -84,10 +84,10 @@ export default function AdminPickers() {
                 </div>
             </div>
             {panelOpen && selectedPicker && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30" onClick={closePanel}>
-                    <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl p-10 flex flex-col relative border border-slate-200 animate-fade-in" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30 p-4" onClick={closePanel}>
+                    <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl p-6 sm:p-10 flex flex-col relative border border-slate-200 animate-fade-in max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         <button className="absolute top-4 right-4 text-slate-400 hover:text-rose-600 text-2xl transition-colors" onClick={closePanel} aria-label="Close">✕</button>
-                        <h2 className="text-2xl font-bold mb-6 text-primary-700">Picker Details</h2>
+                        <h2 className="text-xl sm:text-2xl font-bold mb-6 text-primary-700">Picker Details</h2>
                         <div className="mb-8">
                             <div className="mb-4">
                                 <span className="block text-xs font-semibold text-slate-500 mb-1">Basic Info</span>

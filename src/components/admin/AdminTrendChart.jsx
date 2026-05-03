@@ -9,6 +9,27 @@ function toHeightPercent(value, maxValue) {
     return Math.max(4, Math.round((value / maxValue) * 100));
 }
 
+function calculateDynamicScale(maxValue) {
+    if (maxValue === 0) return 10;
+    
+    // Calculate the order of magnitude
+    const magnitude = Math.floor(Math.log10(maxValue));
+    const normalized = maxValue / Math.pow(10, magnitude);
+    
+    // Round up to nice increments (1, 2, 5, 10)
+    let increment;
+    if (normalized <= 1) increment = 1;
+    else if (normalized <= 2) increment = 2;
+    else if (normalized <= 5) increment = 5;
+    else increment = 10;
+    
+    // Calculate base scale
+    const baseScale = increment * Math.pow(10, magnitude);
+    
+    // Add 15% padding for visual breathing room
+    return Math.ceil(baseScale * 1.15);
+}
+
 export default function AdminTrendChart({
     title,
     subtitle,
@@ -32,7 +53,7 @@ export default function AdminTrendChart({
         }, 0);
     }, [data, firstKey, secondKey, visibleSeries]);
 
-    const scaleMax = useMemo(() => Math.max(10, maxValue), [maxValue]);
+    const scaleMax = useMemo(() => calculateDynamicScale(maxValue), [maxValue]);
 
     const totals = useMemo(() => {
         return data.reduce((acc, item) => ({
@@ -49,40 +70,42 @@ export default function AdminTrendChart({
     };
 
     return (
-        <div className={`card p-5 border border-slate-200 h-full flex flex-col ${className}`}>
-            <div className="mb-4 flex items-start justify-between gap-3">
+        <div className={`card p-6 border border-slate-200 h-full flex flex-col bg-gradient-to-br from-slate-50 to-white ${className}`}>
+            <div className="mb-5 flex items-start justify-between gap-4">
                 <div>
-                    <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4 text-secondary-600" /> {title}
+                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-secondary-600" /> {title}
                     </h3>
-                    {subtitle ? <p className="text-xs text-slate-500 mt-1">{subtitle}</p> : null}
+                    {subtitle ? <p className="text-sm text-slate-500 mt-2">{subtitle}</p> : null}
                 </div>
-                <div className="flex items-center gap-3 text-xs text-slate-600">
+                <div className="flex items-center gap-2 text-xs text-slate-600">
                     <button
                         type="button"
-                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${visibleSeries.first ? 'border-secondary-200 bg-secondary-50 text-secondary-800' : 'border-slate-200 bg-white text-slate-500'}`}
+                        className={`inline-flex items-center gap-2 rounded-full border-2 px-3 py-1.5 font-medium transition-all ${visibleSeries.first ? 'border-secondary-400 bg-secondary-50 text-secondary-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}`}
                         onClick={() => toggleSeries('first')}
                     >
-                        <span className={`h-2 w-2 rounded-full ${visibleSeries.first ? 'bg-secondary-500' : 'bg-slate-300'}`}></span>
+                        <span className={`h-2.5 w-2.5 rounded-full transition-colors ${visibleSeries.first ? 'bg-secondary-500' : 'bg-slate-300'}`}></span>
                         {firstLabel} ({totals.first})
                     </button>
                     <button
                         type="button"
-                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 ${visibleSeries.second ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-slate-200 bg-white text-slate-500'}`}
+                        className={`inline-flex items-center gap-2 rounded-full border-2 px-3 py-1.5 font-medium transition-all ${visibleSeries.second ? 'border-amber-400 bg-amber-50 text-amber-700 shadow-sm' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}`}
                         onClick={() => toggleSeries('second')}
                     >
-                        <span className={`h-2 w-2 rounded-full ${visibleSeries.second ? 'bg-amber-500' : 'bg-slate-300'}`}></span>
+                        <span className={`h-2.5 w-2.5 rounded-full transition-colors ${visibleSeries.second ? 'bg-amber-500' : 'bg-slate-300'}`}></span>
                         {secondLabel} ({totals.second})
                     </button>
                 </div>
             </div>
 
             {data.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
-                    No trend data available for the selected range.
+                <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-gradient-to-br from-slate-50 to-slate-100 p-8 text-center text-slate-500">
+                    <TrendingUp className="h-8 w-8 mx-auto mb-2 text-slate-400 opacity-50" />
+                    <p className="text-sm font-medium">No trend data available</p>
+                    <p className="text-xs mt-1">for the selected range</p>
                 </div>
             ) : (
-                <div className="relative flex-1 min-h-[260px] flex flex-col">
+                <div className="relative flex-1 min-h-[220px] flex flex-col">
                     <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500">
                         <span>Scale</span>
                         <span>0 to {scaleMax}</span>
@@ -115,7 +138,7 @@ export default function AdminTrendChart({
                                             className="flex-1 min-w-[64px] h-full rounded-md"
                                         >
                                             <div className="h-full grid grid-rows-[1fr_auto]">
-                                                <div className="flex items-end justify-center gap-1 min-h-[140px]">
+                                                <div className="flex items-end justify-center gap-1 min-h-[100px]">
                                                     <div
                                                         className={`w-3 rounded-t ${visibleSeries.first ? 'bg-secondary-500' : 'bg-secondary-200/40'}`}
                                                         style={{ height: `${firstHeight}%` }}

@@ -203,27 +203,29 @@ export default function RequestPickup() {
     };
 
     return (
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <h1 className="text-2xl font-bold text-gray-900 mb-6">Create a Request</h1>
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6 text-center">Create a Request</h1>
 
-            <div className="card p-8">
+            <div className="card p-6 sm:p-8 max-w-4xl mx-auto">
                 <form className="space-y-6" onSubmit={handleSubmit}>
-                    <div>
-                        <ListboxSelect
-                            label="Request Type"
-                            value={requestType}
-                            onChange={setRequestType}
-                            options={REQUEST_TYPES}
-                        />
-                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <ListboxSelect
+                                label="Request Type"
+                                value={requestType}
+                                onChange={setRequestType}
+                                options={REQUEST_TYPES}
+                            />
+                        </div>
 
-                    <div>
-                        <ListboxSelect
-                            label="Category"
-                            value={formData.category}
-                            onChange={(val) => setFormData({ ...formData, category: val })}
-                            options={CATEGORIES}
-                        />
+                        <div>
+                            <ListboxSelect
+                                label="Category"
+                                value={formData.category}
+                                onChange={(val) => setFormData({ ...formData, category: val })}
+                                options={CATEGORIES}
+                            />
+                        </div>
                     </div>
 
                     <div>

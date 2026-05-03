@@ -155,7 +155,7 @@ function App() {
                 <AdminPickups />
               </ProtectedRoute>
             } />
-            <Route path="request-update" element={
+            <Route path="requests/update/:requestType/*" element={
               <ProtectedRoute roles={['ADMIN']}>
                 <AdminRequestUpdate />
               </ProtectedRoute>

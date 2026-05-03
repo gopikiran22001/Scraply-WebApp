@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../api/axios';
-import { Download, FileText, Search, RefreshCw, Filter, ArrowUpDown, CalendarRange } from 'lucide-react';
+import { Download, FileText, Search, RefreshCw, Filter, ArrowUpDown, CalendarRange, BarChart3, Activity, Calendar } from 'lucide-react';
 import ListboxSelect from '../../components/ListboxSelect';
+import ComboboxSelect from '../../components/ComboboxSelect';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { useToast } from '../../context/ToastContext';
 import AdminPagination from '../../components/admin/AdminPagination';
@@ -30,7 +31,8 @@ export default function AdminReports() {
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [sortBy, setSortBy] = useState('LATEST');
     const [trendMode, setTrendMode] = useState('WEEKLY');
-    const [startDate, setStartDate] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+    // Set date range to current month (1st of month to today)
+    const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [sortConfig, setSortConfig] = useState({ key: 'reportedAt', direction: 'desc' });
     const [page, setPage] = useState(1);
@@ -55,13 +57,30 @@ export default function AdminReports() {
                 api.get('/auth/pickers'),
             ]);
 
-            const pickups = Array.isArray(pickupsData) ? pickupsData : [];
-            const illegalReports = Array.isArray(reportsData) ? reportsData : [];
+            const pickups = (Array.isArray(pickupsData) ? pickupsData : []).map((item) => ({
+                ...item,
+                displayId: String(item.id || 'NODATA').slice(-6),
+            }));
+            
+            const illegalReports = (Array.isArray(reportsData) ? reportsData : []).map((item) => ({
+                ...item,
+                displayId: String(item.id || 'NODATA').slice(-6),
+            }));
+            
             const pickersList = Array.isArray(pickersData) ? pickersData : [];
 
             setPickups(pickups);
             setReports(illegalReports);
             setPickers(pickersList);
+            
+            // Debug logging
+            console.log('[Reports] API Response Summary:');
+            console.log(`  Pickups: ${pickups.length} items`);
+            console.log(`  Reports: ${illegalReports.length} items`);
+            const invalidReports = illegalReports.filter(r => !r.id);
+            if (invalidReports.length > 0) {
+                console.warn(`  WARNING: ${invalidReports.length} reports have missing IDs`);
+            }
 
             try {
                 const { data: logReportData } = await api.get('/auth/agent-logs/report', {
@@ -529,11 +548,11 @@ export default function AdminReports() {
     }
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
             <div className="admin-shell p-6 sm:p-8">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-8">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-900">System Reports</h1>
+                        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">System Reports</h1>
                         <p className="text-slate-600 mt-1">Deep view of pickup and dump trends plus illegal dump lifecycle.</p>
                     </div>
                     <div className="flex gap-2">
@@ -552,48 +571,150 @@ export default function AdminReports() {
                     </div>
                 </div>
 
-                <div className="grid gap-3 lg:grid-cols-5 mb-6">
-                    <div className="lg:col-span-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                        <CalendarRange className="h-4 w-4 text-slate-500" />
-                        <input
-                            type="date"
-                            className="w-full text-sm text-slate-700 outline-none"
-                            value={startDate}
-                            onChange={(event) => setStartDate(event.target.value)}
-                        />
-                        <span className="text-slate-400 text-xs">to</span>
-                        <input
-                            type="date"
-                            className="w-full text-sm text-slate-700 outline-none"
-                            value={endDate}
-                            onChange={(event) => setEndDate(event.target.value)}
-                        />
-                    </div>
-                    <div className="lg:col-span-2">
-                        <ListboxSelect
-                            value={trendMode}
-                            onChange={setTrendMode}
-                            options={[
-                                { value: 'WEEKLY', label: 'Trend Mode: Weekly' },
-                                { value: 'MONTHLY', label: 'Trend Mode: Monthly' },
-                            ]}
-                        />
-                    </div>
-                    <div className="text-xs text-slate-500 flex items-center justify-start lg:justify-end">
-                        Filters apply to analytics and tables.
-                    </div>
-                </div>
-
                 <div className="mb-6">
-                    <AdminTrendChart
-                        title={`${trendMode === 'WEEKLY' ? 'Weekly' : 'Monthly'} Activity Trend`}
-                        subtitle="Pickups vs dumps volume in selected range"
-                        data={trendData}
-                        firstKey="pickups"
-                        secondKey="reports"
-                        firstLabel="Pickups"
-                        secondLabel="Dumps"
-                    />
+                    <div className="grid gap-4 lg:grid-cols-2 mb-4">
+                        {/* Date Range Filter Card */}
+                        <div className="card p-5 border border-slate-200 bg-gradient-to-br from-slate-50 to-white">
+                            <div className="flex items-center gap-2 mb-4">
+                                <CalendarRange className="h-5 w-5 text-primary-600" />
+                                <h3 className="font-semibold text-slate-900">Date Range</h3>
+                            </div>
+                            
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1.5">From</label>
+                                        <input
+                                            type="date"
+                                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+                                            value={startDate}
+                                            onChange={(event) => setStartDate(event.target.value)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1.5">To</label>
+                                        <input
+                                            type="date"
+                                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+                                            value={endDate}
+                                            onChange={(event) => setEndDate(event.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                
+                                {/* Quick filter buttons */}
+                                <div>
+                                    <p className="text-xs font-medium text-slate-600 mb-2">Quick filters</p>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEndDate(format(new Date(), 'yyyy-MM-dd'));
+                                                setStartDate(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
+                                            }}
+                                            className="px-2 py-1.5 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                                        >
+                                            7 days
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEndDate(format(new Date(), 'yyyy-MM-dd'));
+                                                setStartDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+                                            }}
+                                            className="px-2 py-1.5 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                                        >
+                                            30 days
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEndDate(format(new Date(), 'yyyy-MM-dd'));
+                                                setStartDate(format(subDays(new Date(), 90), 'yyyy-MM-dd'));
+                                            }}
+                                            className="px-2 py-1.5 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                                        >
+                                            90 days
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEndDate(format(new Date(), 'yyyy-MM-dd'));
+                                                setStartDate(format(subDays(new Date(), 365), 'yyyy-MM-dd'));
+                                            }}
+                                            className="px-2 py-1.5 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                                        >
+                                            1 year
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Trend Mode Card */}
+                        <div className="card p-5 border border-slate-200 bg-gradient-to-br from-slate-50 to-white">
+                            <div className="flex items-center gap-2 mb-4">
+                                <BarChart3 className="h-5 w-5 text-primary-600" />
+                                <h3 className="font-semibold text-slate-900">Analysis Mode</h3>
+                            </div>
+                            
+                            <div className="space-y-3">
+                                <p className="text-xs text-slate-600">Select how you want to visualize trends:</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setTrendMode('WEEKLY')}
+                                        className={`px-4 py-2.5 rounded-lg font-medium text-sm transition flex items-center justify-center gap-2 border-2 ${
+                                            trendMode === 'WEEKLY'
+                                                ? 'bg-primary-600 text-white border-primary-600 shadow-md'
+                                                : 'bg-white text-slate-700 border-slate-300 hover:border-primary-400'
+                                        }`}
+                                    >
+                                        <Activity className="h-4 w-4" />
+                                        Weekly
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setTrendMode('MONTHLY')}
+                                        className={`px-4 py-2.5 rounded-lg font-medium text-sm transition flex items-center justify-center gap-2 border-2 ${
+                                            trendMode === 'MONTHLY'
+                                                ? 'bg-primary-600 text-white border-primary-600 shadow-md'
+                                                : 'bg-white text-slate-700 border-slate-300 hover:border-primary-400'
+                                        }`}
+                                    >
+                                        <Calendar className="h-4 w-4" />
+                                        Monthly
+                                    </button>
+                                </div>
+                                
+                                <div className="mt-3 p-3 bg-primary-50 rounded-lg border border-primary-200">
+                                    <p className="text-xs text-primary-700 font-medium">
+                                        {trendMode === 'WEEKLY' 
+                                            ? '📊 Displaying weekly trends - Great for identifying short-term patterns'
+                                            : '📈 Displaying monthly trends - Great for identifying long-term patterns'
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="text-xs text-slate-500 bg-slate-50 rounded-lg px-4 py-2.5 border border-slate-200 flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 bg-primary-500 rounded-full"></span>
+                        Filters apply to analytics, charts, and report tables
+                    </div>
+
+                    <div className="mt-6">
+                        <AdminTrendChart
+                            title={`${trendMode === 'WEEKLY' ? 'Weekly' : 'Monthly'} Activity Trend`}
+                            subtitle="Pickups vs dumps volume in selected range"
+                            data={trendData}
+                            firstKey="pickups"
+                            secondKey="reports"
+                            firstLabel="Pickups"
+                            secondLabel="Dumps"
+                        />
+                    </div>
                 </div>
 
                 <div className="grid xl:grid-cols-3 gap-5 mb-6">
@@ -682,11 +803,11 @@ export default function AdminReports() {
                                             {report.status === 'ASSIGNED' ? (
                                                 <span className="text-sm text-slate-600">{report.pickerName || 'N/A'}</span>
                                             ) : (
-                                                <ListboxSelect
+                                                <ComboboxSelect
                                                     value={assignPickerIdMap[report.id] || ''}
                                                     onChange={(pickerId) => setAssignPickerIdMap((prev) => ({ ...prev, [report.id]: pickerId }))}
                                                     options={pickerOptions}
-                                                    placeholder="Select picker"
+                                                    placeholder="Search picker"
                                                 />
                                             )}
                                         </td>

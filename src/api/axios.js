@@ -33,6 +33,8 @@ const normalizedBaseUrl = configuredBaseUrl.endsWith('/')
     ? configuredBaseUrl.slice(0, -1)
     : configuredBaseUrl;
 
+console.log('[Axios] Configured API Base URL:', normalizedBaseUrl);
+
 const api = axios.create({
     baseURL: normalizedBaseUrl,
     withCredentials: true,
@@ -51,11 +53,14 @@ api.interceptors.request.use(
         }
 
         const token = localStorage.getItem(AUTH_TOKEN_KEY);
+        const hasToken = !!token;
 
         if (token) {
             config.headers = config.headers || {};
             config.headers.Authorization = `Bearer ${token}`;
         }
+
+        console.log(`[Axios] ${config.method.toUpperCase()} ${config.url} - Token: ${hasToken ? '✓' : '✗'}`);
 
         return config;
     },
@@ -71,6 +76,9 @@ api.interceptors.response.use(
             stopApiActivity();
         }
 
+        const dataLength = Array.isArray(response.data) ? response.data.length : (typeof response.data === 'object' ? Object.keys(response.data || {}).length : 'N/A');
+        console.log(`[Axios] Response ${response.status} from ${response.config.url} - Data items: ${dataLength}`);
+
         return response;
     },
     (error) => {
@@ -78,9 +86,11 @@ api.interceptors.response.use(
             stopApiActivity();
         }
 
+        console.error(`[Axios] Error ${error.response?.status || 'unknown'} from ${error.config?.url}:`, error.response?.data || error.message);
+
         if (error.response?.status === 401) {
             localStorage.removeItem(AUTH_TOKEN_KEY);
-            console.warn('Unauthorized API request. Session may be expired.');
+            console.warn('[Axios] Unauthorized API request (401). Session may be expired.');
         }
         return Promise.reject(error);
     }

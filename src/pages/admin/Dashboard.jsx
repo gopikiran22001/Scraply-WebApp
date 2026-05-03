@@ -11,6 +11,7 @@ import {
     Activity,
     Flame,
     CalendarRange,
+    Calendar,
 } from 'lucide-react';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { useToast } from '../../context/ToastContext';
@@ -42,7 +43,8 @@ export default function AdminDashboard() {
     const [reports, setReports] = useState([]);
     const [pickers, setPickers] = useState([]);
     const [trendMode, setTrendMode] = useState('WEEKLY');
-    const [startDate, setStartDate] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+    // Set date range to current month (1st of month to today)
+    const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
     const fetchData = useCallback(async (silent = false) => {
@@ -53,21 +55,56 @@ export default function AdminDashboard() {
         }
 
         try {
-            const [{ data: pickupsData }, { data: reportsData }, { data: pickersData }] = await Promise.all([
+            console.log('[Dashboard] Fetching data from APIs...');
+            const [pickupsResponse, reportsResponse, pickersResponse] = await Promise.all([
                 api.get('/pickups/'),
                 api.get('/illegals/'),
                 api.get('/auth/pickers'),
             ]);
 
+            const pickupsData = pickupsResponse?.data;
+            const reportsData = reportsResponse?.data;
+            const pickersData = pickersResponse?.data;
+
+            console.log('[Dashboard] API Responses received:');
+            console.log('  /pickups/ response type:', typeof pickupsData, 'is array:', Array.isArray(pickupsData));
+            console.log('  /illegals/ response type:', typeof reportsData, 'is array:', Array.isArray(reportsData));
+            console.log('  /auth/pickers response type:', typeof pickersData, 'is array:', Array.isArray(pickersData));
+
             const pickups = Array.isArray(pickupsData) ? pickupsData : [];
             const reports = Array.isArray(reportsData) ? reportsData : [];
             const pickersList = Array.isArray(pickersData) ? pickersData : [];
+
+            console.log('[Dashboard] Parsed Data:');
+            console.log(`  Pickups: ${pickups.length} items`);
+            if (pickups.length > 0) {
+                console.log('  First pickup:', pickups[0]);
+            } else {
+                console.warn('  ⚠️ No pickups returned from API');
+            }
+            
+            console.log(`  Reports: ${reports.length} items`);
+            if (reports.length > 0) {
+                console.log('  First report:', reports[0]);
+            } else {
+                console.warn('  ⚠️ No reports returned from API');
+            }
+            
+            console.log(`  Pickers: ${pickersList.length} items`);
 
             setPickups(pickups);
             setReports(reports);
             setPickers(pickersList);
             setLastSyncedAt(new Date());
+            
+            if (pickups.length === 0 && reports.length === 0) {
+                console.warn('[Dashboard] ⚠️ Both pickups and reports are empty - check database or API');
+            }
         } catch (error) {
+            console.error('[Dashboard] API Error:', error);
+            console.error('  Error message:', error.message);
+            console.error('  Error response:', error.response?.data);
+            console.error('  Error status:', error.response?.status);
             addToast(getApiErrorMessage(error, 'Failed to load admin dashboard data'), 'error');
         } finally {
             setLoading(false);
@@ -86,21 +123,25 @@ export default function AdminDashboard() {
 
         const current = typeof inputDate === 'string' ? new Date(inputDate) : inputDate;
         if (!(current instanceof Date) || Number.isNaN(current.getTime())) {
+            console.warn('[Dashboard] Invalid date:', { inputDate, parsed: current });
             return false;
         }
 
         const from = startDate ? new Date(`${startDate}T00:00:00`) : null;
         const to = endDate ? new Date(`${endDate}T23:59:59`) : null;
 
-        if (from && current < from) {
-            return false;
+        const passesFilter = (from ? current >= from : true) && (to ? current <= to : true);
+        
+        if (!passesFilter && inputDate) {
+            console.warn('[Dashboard] Date filtered out:', {
+                inputDate,
+                parsed: current.toISOString(),
+                from: from?.toISOString(),
+                to: to?.toISOString(),
+            });
         }
 
-        if (to && current > to) {
-            return false;
-        }
-
-        return true;
+        return passesFilter;
     }, [startDate, endDate]);
 
     const getPickupDate = useCallback((item) => {
@@ -112,12 +153,36 @@ export default function AdminDashboard() {
     }, []);
 
     const filteredPickups = useMemo(() => {
-        return pickups.filter((item) => inDateRange(getPickupDate(item)));
-    }, [getPickupDate, inDateRange, pickups]);
+        const result = pickups.filter((item) => inDateRange(getPickupDate(item)));
+        console.log('[Dashboard] Filtering pickups:', {
+            total: pickups.length,
+            afterDateFilter: result.length,
+            dateRange: { startDate, endDate },
+            samplePickupDates: pickups.slice(0, 3).map(p => ({
+                id: p.id,
+                requestedAt: p.requestedAt,
+                createdAt: p.createdAt,
+                dateUsed: getPickupDate(p),
+            })),
+        });
+        return result;
+    }, [getPickupDate, inDateRange, pickups, startDate, endDate]);
 
     const filteredReports = useMemo(() => {
-        return reports.filter((item) => inDateRange(getReportDate(item)));
-    }, [getReportDate, inDateRange, reports]);
+        const result = reports.filter((item) => inDateRange(getReportDate(item)));
+        console.log('[Dashboard] Filtering reports:', {
+            total: reports.length,
+            afterDateFilter: result.length,
+            dateRange: { startDate, endDate },
+            sampleReportDates: reports.slice(0, 3).map(r => ({
+                id: r.id,
+                reportedAt: r.reportedAt,
+                createdAt: r.createdAt,
+                dateUsed: getReportDate(r),
+            })),
+        });
+        return result;
+    }, [getReportDate, inDateRange, reports, startDate, endDate]);
 
     const stats = useMemo(() => ({
         totalPickups: filteredPickups.length,
@@ -315,7 +380,7 @@ export default function AdminDashboard() {
 
     if (loading) {
         return (
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
                 <div className="admin-shell p-6 sm:p-8 animate-pulse">
                     <div className="h-8 w-72 bg-slate-200 rounded mb-4"></div>
                     <div className="h-4 w-80 bg-slate-100 rounded mb-8"></div>
@@ -330,11 +395,11 @@ export default function AdminDashboard() {
     }
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
             <div className="admin-shell p-6 sm:p-8">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-8">
                     <div>
-                        <h1 className="text-3xl font-bold text-slate-900">Admin Command Center</h1>
+                        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-900">Admin Command Center</h1>
                         <p className="text-slate-600 mt-1">Live pickup and illegal dump activity across the city.</p>
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
                             <span className="admin-chip">Completion {completionRate}%</span>
@@ -359,35 +424,137 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                <div className="grid gap-3 lg:grid-cols-5 mb-6">
-                    <div className="lg:col-span-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                        <CalendarRange className="h-4 w-4 text-slate-500" />
-                        <input
-                            type="date"
-                            className="w-full text-sm text-slate-700 outline-none"
-                            value={startDate}
-                            onChange={(event) => setStartDate(event.target.value)}
-                        />
-                        <span className="text-slate-400 text-xs">to</span>
-                        <input
-                            type="date"
-                            className="w-full text-sm text-slate-700 outline-none"
-                            value={endDate}
-                            onChange={(event) => setEndDate(event.target.value)}
-                        />
+                <div className="mb-8">
+                    <div className="grid gap-4 lg:grid-cols-2 mb-4">
+                        {/* Date Range Filter Card */}
+                        <div className="card p-5 border border-slate-200 bg-gradient-to-br from-slate-50 to-white">
+                            <div className="flex items-center gap-2 mb-4">
+                                <CalendarRange className="h-5 w-5 text-primary-600" />
+                                <h3 className="font-semibold text-slate-900">Date Range</h3>
+                            </div>
+                            
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1.5">From</label>
+                                        <input
+                                            type="date"
+                                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+                                            value={startDate}
+                                            onChange={(event) => setStartDate(event.target.value)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1.5">To</label>
+                                        <input
+                                            type="date"
+                                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+                                            value={endDate}
+                                            onChange={(event) => setEndDate(event.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                
+                                {/* Quick filter buttons */}
+                                <div>
+                                    <p className="text-xs font-medium text-slate-600 mb-2">Quick filters</p>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEndDate(format(new Date(), 'yyyy-MM-dd'));
+                                                setStartDate(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
+                                            }}
+                                            className="px-2 py-1.5 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                                        >
+                                            7 days
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEndDate(format(new Date(), 'yyyy-MM-dd'));
+                                                setStartDate(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+                                            }}
+                                            className="px-2 py-1.5 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                                        >
+                                            30 days
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEndDate(format(new Date(), 'yyyy-MM-dd'));
+                                                setStartDate(format(subDays(new Date(), 90), 'yyyy-MM-dd'));
+                                            }}
+                                            className="px-2 py-1.5 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                                        >
+                                            90 days
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEndDate(format(new Date(), 'yyyy-MM-dd'));
+                                                setStartDate(format(subDays(new Date(), 365), 'yyyy-MM-dd'));
+                                            }}
+                                            className="px-2 py-1.5 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 transition"
+                                        >
+                                            1 year
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Trend Mode Card */}
+                        <div className="card p-5 border border-slate-200 bg-gradient-to-br from-slate-50 to-white">
+                            <div className="flex items-center gap-2 mb-4">
+                                <BarChart3 className="h-5 w-5 text-primary-600" />
+                                <h3 className="font-semibold text-slate-900">Analysis Mode</h3>
+                            </div>
+                            
+                            <div className="space-y-3">
+                                <p className="text-xs text-slate-600">Select how you want to visualize trends:</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setTrendMode('WEEKLY')}
+                                        className={`px-4 py-2.5 rounded-lg font-medium text-sm transition flex items-center justify-center gap-2 border-2 ${
+                                            trendMode === 'WEEKLY'
+                                                ? 'bg-primary-600 text-white border-primary-600 shadow-md'
+                                                : 'bg-white text-slate-700 border-slate-300 hover:border-primary-400'
+                                        }`}
+                                    >
+                                        <Activity className="h-4 w-4" />
+                                        Weekly
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setTrendMode('MONTHLY')}
+                                        className={`px-4 py-2.5 rounded-lg font-medium text-sm transition flex items-center justify-center gap-2 border-2 ${
+                                            trendMode === 'MONTHLY'
+                                                ? 'bg-primary-600 text-white border-primary-600 shadow-md'
+                                                : 'bg-white text-slate-700 border-slate-300 hover:border-primary-400'
+                                        }`}
+                                    >
+                                        <Calendar className="h-4 w-4" />
+                                        Monthly
+                                    </button>
+                                </div>
+                                
+                                <div className="mt-3 p-3 bg-primary-50 rounded-lg border border-primary-200">
+                                    <p className="text-xs text-primary-700 font-medium">
+                                        {trendMode === 'WEEKLY' 
+                                            ? '📊 Displaying weekly trends - Great for identifying short-term patterns'
+                                            : '📈 Displaying monthly trends - Great for identifying long-term patterns'
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div className="lg:col-span-2">
-                        <ListboxSelect
-                            value={trendMode}
-                            onChange={setTrendMode}
-                            options={[
-                                { value: 'WEEKLY', label: 'Trend Mode: Weekly' },
-                                { value: 'MONTHLY', label: 'Trend Mode: Monthly' },
-                            ]}
-                        />
-                    </div>
-                    <div className="text-xs text-slate-500 flex items-center justify-start lg:justify-end">
-                        Filtered range applies to KPIs, hotspots, and charts.
+
+                    <div className="text-xs text-slate-500 bg-slate-50 rounded-lg px-4 py-2.5 border border-slate-200 flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 bg-primary-500 rounded-full"></span>
+                        All KPIs, hotspots, and charts are filtered by the selected date range
                     </div>
                 </div>
 
@@ -425,6 +592,35 @@ export default function AdminDashboard() {
                         <p className="text-xs text-slate-500 mt-2">Hotspots still requiring cleanup</p>
                     </div>
                 </div>
+
+                {pickups.length === 0 && reports.length === 0 && (
+                    <div className="mb-8 p-6 rounded-xl border border-amber-200 bg-amber-50">
+                        <div className="flex items-start gap-3">
+                            <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                                <h3 className="font-semibold text-amber-900 mb-2">No data available</h3>
+                                <p className="text-sm text-amber-800 mb-3">
+                                    The dashboard shows no pickups or dump reports. This could mean:
+                                </p>
+                                <ul className="text-sm text-amber-800 space-y-1 mb-4">
+                                    <li>• <strong>No test data:</strong> Create pickup/dump requests from the citizen or collector app</li>
+                                    <li>• <strong>Not authenticated:</strong> Check console for authorization errors (look for [Axios] logs)</li>
+                                    <li>• <strong>API not connected:</strong> Verify backend is running on port 8080</li>
+                                    <li>• <strong>Session expired:</strong> Try logging out and back in</li>
+                                </ul>
+                                <details className="text-xs text-amber-700">
+                                    <summary className="cursor-pointer font-medium hover:text-amber-800">View troubleshooting info</summary>
+                                    <div className="mt-2 p-3 bg-white rounded border border-amber-100 font-mono text-xs">
+                                        <div>Pickups loaded: {pickups.length}</div>
+                                        <div>Reports loaded: {reports.length}</div>
+                                        <div>Pickers loaded: {pickers.length}</div>
+                                        <div className="mt-2 text-amber-700">Check browser console for detailed API logs starting with [Axios], [Dashboard]</div>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="grid lg:grid-cols-3 gap-6">
                     <div className="card p-6 border border-emerald-100">

@@ -43,7 +43,7 @@ export default function Points() {
     }
 
     return (
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
             <div className="bg-gradient-to-r from-primary-600 to-primary-800 rounded-2xl p-8 text-white mb-8 shadow-xl">
                 <div className="flex flex-col md:flex-row justify-between items-center gap-6">
                     <div>

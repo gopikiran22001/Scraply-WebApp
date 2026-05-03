@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../api/axios';
 import ListboxSelect from '../../components/ListboxSelect';
+import ComboboxSelect from '../../components/ComboboxSelect';
 import { useToast } from '../../context/ToastContext';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
@@ -16,7 +17,7 @@ const STATUS_OPTIONS = [
 
 export default function AdminRequestUpdate() {
     const navigate = useNavigate();
-    const { requestType, id } = useParams();
+    const { requestType, '*': id } = useParams();
     const { addToast } = useToast();
 
     const [loading, setLoading] = useState(true);
@@ -118,7 +119,7 @@ export default function AdminRequestUpdate() {
     }
 
     return (
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
             <div className="admin-shell p-6 sm:p-8">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
                     <div>
@@ -184,6 +185,7 @@ export default function AdminRequestUpdate() {
                                 value={nextStatus}
                                 onChange={setNextStatus}
                                 options={STATUS_OPTIONS}
+                                direction="up"
                             />
                         </div>
 
@@ -191,12 +193,13 @@ export default function AdminRequestUpdate() {
                             <label className="text-xs text-slate-600 block mb-1">
                                 Picker {nextStatus === 'ASSIGNED' ? <span className="text-red-500">*</span> : null}
                             </label>
-                            <ListboxSelect
+                            <ComboboxSelect
                                 value={pickerId}
                                 onChange={setPickerId}
                                 options={pickerOptions}
-                                placeholder="Select picker"
+                                placeholder="Search picker..."
                                 disabled={nextStatus !== 'ASSIGNED'}
+                                direction="up"
                             />
                         </div>
                     </div>

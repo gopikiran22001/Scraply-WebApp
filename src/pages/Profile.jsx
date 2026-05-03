@@ -95,19 +95,19 @@ export default function Profile() {
     if (loading) return <div className="text-center py-12">Loading...</div>;
 
     return (
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <h1 className="text-2xl font-bold text-gray-900 mb-8">My Profile</h1>
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-8 text-center sm:text-left">My Profile</h1>
 
-            <div className="grid md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* Sidebar / Photo */}
                 <div className="md:col-span-1">
                     <div className="card p-6 text-center">
                         <div className="relative inline-block mb-4 group">
-                            <div className="h-32 w-32 rounded-full bg-primary-100 flex items-center justify-center mx-auto overflow-hidden border-4 border-white shadow-lg">
+                            <div className="h-24 w-24 sm:h-32 sm:w-32 rounded-full bg-primary-100 flex items-center justify-center mx-auto overflow-hidden border-4 border-white shadow-lg">
                                 {avatar ? (
                                     <img src={avatar} alt="Profile" className="h-full w-full object-cover" />
                                 ) : (
-                                    <User className="h-16 w-16 text-primary-400" />
+                                    <User className="h-12 w-12 sm:h-16 sm:w-16 text-primary-400" />
                                 )}
                             </div>
                             <label className="absolute bottom-0 right-0 p-2 bg-primary-600 text-white rounded-full hover:bg-primary-700 shadow-md transition-colors cursor-pointer">
@@ -149,7 +149,7 @@ export default function Profile() {
 
                 {/* Main Content */}
                 <div className="md:col-span-2">
-                    <div className="card p-8">
+                    <div className="card p-6 sm:p-8">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-lg font-bold text-gray-900">Personal Information</h3>
                             <button

@@ -31,6 +31,7 @@ export default function ListboxSelect({
     renderOption,
     disabled = false,
     name,
+    direction = 'down',
 }) {
     // Normalize options to { value, label } format
     const normalizedOptions = options.map(opt => {
@@ -74,7 +75,7 @@ export default function ListboxSelect({
                             <Listbox.Button
                                 id={id}
                                 className={clsx(
-                                    "relative w-full cursor-default rounded-lg bg-white py-2 text-left border border-gray-200 focus:outline-none focus-visible:border-primary-500 focus-visible:ring-2 focus-visible:ring-white/75 focus-visible:ring-offset-2 focus-visible:ring-offset-primary-300 sm:text-sm transition-all",
+                                    "relative w-full cursor-default rounded-lg bg-white py-2.5 sm:py-2 text-left border border-gray-200 focus:outline-none focus-visible:border-primary-500 focus-visible:ring-2 focus-visible:ring-white/75 focus-visible:ring-offset-2 focus-visible:ring-offset-primary-300 sm:text-sm text-base transition-all min-h-[44px] sm:min-h-[40px] flex items-center",
                                     leftIcon ? "pl-10 pr-10" : "pl-3 pr-10",
                                     disabled && "opacity-50 cursor-not-allowed bg-gray-50"
                                 )}
@@ -100,13 +101,17 @@ export default function ListboxSelect({
                                 leaveFrom="opacity-100"
                                 leaveTo="opacity-0"
                             >
-                                <Listbox.Options className="absolute mt-1 max-h-60 w-full overflow-auto no-scrollbar rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm z-50">
+                                <Listbox.Options className={clsx(
+                                    "absolute w-full max-h-60 overflow-y-auto dropdown-scrollbar rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm z-50",
+                                    direction === 'up' ? "bottom-full mb-1" : "mt-1"
+                                )}>
                                     {normalizedOptions.map((option, optionIdx) => (
                                         <Listbox.Option
                                             key={optionIdx}
                                             className={({ active }) =>
                                                 clsx(
-                                                    "relative cursor-default select-none py-2 pl-10 pr-4",
+                                                    "relative cursor-default select-none py-2",
+                                                    leftIcon ? "pl-10 pr-10" : "pl-3 pr-10",
                                                     active ? "bg-primary-100 text-primary-900" : "text-gray-900"
                                                 )
                                             }
@@ -123,7 +128,7 @@ export default function ListboxSelect({
                                                         {renderOption ? renderOption(option) : option.label}
                                                     </span>
                                                     {selected ? (
-                                                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-primary-600">
+                                                        <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-primary-600">
                                                             <Check className="h-5 w-5" aria-hidden="true" />
                                                         </span>
                                                     ) : null}
