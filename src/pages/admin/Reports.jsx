@@ -19,8 +19,25 @@ const STATUS_OPTIONS = [
     { value: 'CANCELLED', label: 'CANCELLED' },
 ];
 
+const REQUEST_TYPE_OPTIONS = [
+    { value: 'ALL', label: 'All Requests' },
+    { value: 'PICKUP', label: 'Pickups' },
+    { value: 'DUMP', label: 'Illegal Dumps' },
+];
+
+const EXPORT_SCOPE_OPTIONS = [
+    { value: 'ALL', label: 'Export: All' },
+    { value: 'PICKUP', label: 'Export: Pickups' },
+    { value: 'DUMP', label: 'Export: Illegal Dumps' },
+];
+
 
 export default function AdminReports() {
+    const getDateTimeLocalValue = (date) => {
+        const offsetMs = date.getTimezoneOffset() * 60000;
+        return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+    };
+
     const { addToast } = useToast();
     const [pickups, setPickups] = useState([]);
     const [reports, setReports] = useState([]);
@@ -29,6 +46,8 @@ export default function AdminReports() {
     const [refreshing, setRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('ALL');
+    const [requestTypeFilter, setRequestTypeFilter] = useState('ALL');
+    const [exportScope, setExportScope] = useState('ALL');
     const [sortBy, setSortBy] = useState('LATEST');
     const [trendMode, setTrendMode] = useState('WEEKLY');
     // Set date range to current month (1st of month to today)
@@ -39,9 +58,42 @@ export default function AdminReports() {
     const [pageSize, setPageSize] = useState(10);
     const [assignPickerIdMap, setAssignPickerIdMap] = useState({});
     const [agentLogReport, setAgentLogReport] = useState(null);
+    const [agentLogs, setAgentLogs] = useState([]);
     const [agentLogLevelFilter, setAgentLogLevelFilter] = useState('ALL');
     const [agentLogAgentFilter, setAgentLogAgentFilter] = useState('ALL');
     const [agentLogEventFilter, setAgentLogEventFilter] = useState('ALL');
+    const [agentLogRequestTypeFilter, setAgentLogRequestTypeFilter] = useState('ALL');
+    const [agentLogRangePreset, setAgentLogRangePreset] = useState('24H');
+    const [agentLogStartAt, setAgentLogStartAt] = useState(getDateTimeLocalValue(new Date(Date.now() - (24 * 60 * 60 * 1000))));
+    const [agentLogEndAt, setAgentLogEndAt] = useState(getDateTimeLocalValue(new Date()));
+    const [agentLogPage, setAgentLogPage] = useState(1);
+    const [agentLogPageSize, setAgentLogPageSize] = useState(10);
+
+    const fetchAgentLogs = useCallback(async () => {
+        const presetHours = {
+            '24H': 24,
+            '7D': 24 * 7,
+            '30D': 24 * 30,
+            'ALL': 24 * 30,
+        };
+
+        const hours = presetHours[agentLogRangePreset] || 24;
+        const limit = agentLogRangePreset === 'ALL' ? 200 : 200;
+
+        try {
+            const { data: logReportData } = await api.get('/auth/agent-logs/report', {
+                params: {
+                    hours,
+                    limit,
+                },
+            });
+            setAgentLogReport(logReportData || null);
+            setAgentLogs(Array.isArray(logReportData?.recentLogs) ? logReportData.recentLogs : []);
+        } catch {
+            setAgentLogReport(null);
+            setAgentLogs([]);
+        }
+    }, [agentLogRangePreset]);
 
     const fetchData = useCallback(async (silent = false) => {
         if (silent) {
@@ -82,32 +134,29 @@ export default function AdminReports() {
                 console.warn(`  WARNING: ${invalidReports.length} reports have missing IDs`);
             }
 
-            try {
-                const { data: logReportData } = await api.get('/auth/agent-logs/report', {
-                    params: {
-                        hours: 24,
-                        limit: 25,
-                    },
-                });
-                setAgentLogReport(logReportData || null);
-            } catch {
-                setAgentLogReport(null);
-            }
+            await fetchAgentLogs();
         } catch (error) {
             addToast(getApiErrorMessage(error, 'Error fetching report data'), 'error');
             setPickups([]);
             setReports([]);
             setPickers([]);
             setAgentLogReport(null);
+            setAgentLogs([]);
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [addToast]);
+    }, [addToast, fetchAgentLogs]);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    useEffect(() => {
+        if (!loading) {
+            fetchAgentLogs();
+        }
+    }, [agentLogRangePreset, fetchAgentLogs, loading]);
 
     const updateReportStatus = async (reportId, nextStatus) => {
         // Check if status is ASSIGNED and require picker selection
@@ -225,14 +274,26 @@ export default function AdminReports() {
         const from = startDate ? new Date(`${startDate}T00:00:00`) : null;
         const to = endDate ? new Date(`${endDate}T23:59:59`) : null;
 
-        const matches = reports.filter((report) => {
-            if (statusFilter !== 'ALL' && report.status !== statusFilter) {
+        // Combine pickups and dumps with type field
+        const combined = [
+            ...pickups.map(item => ({ ...item, requestType: 'PICKUP', dateField: item.requestedAt || item.createdAt || item.updatedAt })),
+            ...reports.map(item => ({ ...item, requestType: 'DUMP', dateField: item.reportedAt || item.createdAt || item.updatedAt }))
+        ];
+
+        const matches = combined.filter((item) => {
+            // Filter by request type
+            if (requestTypeFilter !== 'ALL' && item.requestType !== requestTypeFilter) {
                 return false;
             }
 
-            const reportDate = report.reportedAt || report.createdAt || report.updatedAt;
-            if (reportDate) {
-                const parsedDate = new Date(reportDate);
+            // Filter by status
+            if (statusFilter !== 'ALL' && item.status !== statusFilter) {
+                return false;
+            }
+
+            // Filter by date range
+            if (item.dateField) {
+                const parsedDate = new Date(item.dateField);
                 if (!Number.isNaN(parsedDate.getTime())) {
                     if (from && parsedDate < from) {
                         return false;
@@ -244,22 +305,25 @@ export default function AdminReports() {
                 }
             }
 
+            // Search filter
             if (!normalizedSearch) {
                 return true;
             }
 
-            const address = String(report.address || '').toLowerCase();
-            const description = String(report.description || '').toLowerCase();
-            const id = String(report.id || '').toLowerCase();
+            const address = String(item.address || '').toLowerCase();
+            const description = String(item.description || '').toLowerCase();
+            const category = String(item.category || '').toLowerCase();
+            const id = String(item.id || '').toLowerCase();
 
             return id.includes(normalizedSearch)
                 || address.includes(normalizedSearch)
-                || description.includes(normalizedSearch);
+                || description.includes(normalizedSearch)
+                || category.includes(normalizedSearch);
         });
 
         return [...matches].sort((left, right) => {
-            const leftTime = left.reportedAt ? new Date(left.reportedAt).getTime() : 0;
-            const rightTime = right.reportedAt ? new Date(right.reportedAt).getTime() : 0;
+            const leftTime = left.dateField ? new Date(left.dateField).getTime() : 0;
+            const rightTime = right.dateField ? new Date(right.dateField).getTime() : 0;
 
             if (sortBy === 'OLDEST') {
                 return leftTime - rightTime;
@@ -271,7 +335,7 @@ export default function AdminReports() {
 
             return rightTime - leftTime;
         });
-    }, [reports, searchTerm, statusFilter, sortBy, startDate, endDate]);
+    }, [pickups, reports, searchTerm, statusFilter, requestTypeFilter, sortBy, startDate, endDate]);
 
     const sortedReports = useMemo(() => {
         const { key, direction } = sortConfig;
@@ -279,9 +343,9 @@ export default function AdminReports() {
             let leftValue;
             let rightValue;
 
-            if (key === 'reportedAt') {
-                leftValue = new Date(left.reportedAt || left.createdAt || left.updatedAt || 0).getTime();
-                rightValue = new Date(right.reportedAt || right.createdAt || right.updatedAt || 0).getTime();
+            if (key === 'reportedAt' || key === 'requestedAt') {
+                leftValue = new Date(left.dateField || 0).getTime();
+                rightValue = new Date(right.dateField || 0).getTime();
             } else {
                 leftValue = String(left[key] || '');
                 rightValue = String(right[key] || '');
@@ -307,7 +371,7 @@ export default function AdminReports() {
 
     useEffect(() => {
         setPage(1);
-    }, [searchTerm, statusFilter, sortBy, startDate, endDate, sortConfig, pageSize]);
+    }, [searchTerm, statusFilter, requestTypeFilter, sortBy, startDate, endDate, sortConfig, pageSize]);
 
     const trendData = useMemo(() => {
         const buckets = new Map();
@@ -404,10 +468,6 @@ export default function AdminReports() {
         }));
     }, [filteredReports]);
 
-    const recentAgentLogs = useMemo(() => {
-        return Array.isArray(agentLogReport?.recentLogs) ? agentLogReport.recentLogs : [];
-    }, [agentLogReport]);
-
     const handleColumnSort = (key) => {
         setSortConfig((previous) => ({
             key,
@@ -431,18 +491,72 @@ export default function AdminReports() {
     };
 
     const downloadCsv = () => {
-        if (filteredReports.length === 0) {
+        const from = startDate ? new Date(`${startDate}T00:00:00`) : null;
+        const to = endDate ? new Date(`${endDate}T23:59:59`) : null;
+        const normalizedSearch = searchTerm.trim().toLowerCase();
+
+        const allRequests = [
+            ...pickups.map((item) => ({
+                ...item,
+                requestType: 'PICKUP',
+                dateField: item.requestedAt || item.createdAt || item.updatedAt,
+            })),
+            ...reports.map((item) => ({
+                ...item,
+                requestType: 'DUMP',
+                dateField: item.reportedAt || item.createdAt || item.updatedAt,
+            })),
+        ];
+
+        const exportRows = allRequests.filter((item) => {
+            if (exportScope !== 'ALL' && item.requestType !== exportScope) {
+                return false;
+            }
+
+            if (statusFilter !== 'ALL' && item.status !== statusFilter) {
+                return false;
+            }
+
+            if (item.dateField) {
+                const parsedDate = new Date(item.dateField);
+                if (!Number.isNaN(parsedDate.getTime())) {
+                    if (from && parsedDate < from) {
+                        return false;
+                    }
+                    if (to && parsedDate > to) {
+                        return false;
+                    }
+                }
+            }
+
+            if (!normalizedSearch) {
+                return true;
+            }
+
+            const address = String(item.address || '').toLowerCase();
+            const description = String(item.description || '').toLowerCase();
+            const category = String(item.category || '').toLowerCase();
+            const id = String(item.id || '').toLowerCase();
+
+            return id.includes(normalizedSearch)
+                || address.includes(normalizedSearch)
+                || description.includes(normalizedSearch)
+                || category.includes(normalizedSearch);
+        });
+
+        if (exportRows.length === 0) {
             addToast('No report data available for export', 'error');
             return;
         }
 
-        const headers = ['id', 'address', 'description', 'status', 'reportedAt'];
-        const rows = filteredReports.map((report) => [
-            report.id,
-            report.address,
-            report.description,
-            report.status,
-            report.reportedAt,
+        const headers = ['type', 'id', 'address', 'description', 'status', 'date'];
+        const rows = exportRows.map((item) => [
+            item.requestType,
+            item.id,
+            item.address || '',
+            item.description || item.category || '',
+            item.status,
+            item.dateField,
         ]);
 
         const escapeValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
@@ -455,12 +569,13 @@ export default function AdminReports() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `illegal-reports-${new Date().toISOString().slice(0, 10)}.csv`);
+        const exportScopeLabel = exportScope === 'ALL' ? 'all' : exportScope.toLowerCase();
+        link.setAttribute('download', `reports-${exportScopeLabel}-${new Date().toISOString().slice(0, 10)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-        addToast('Report exported as CSV', 'success');
+        addToast('Reports exported as CSV', 'success');
     };
 
     const downloadAgentLogsCsv = () => {
@@ -532,14 +647,57 @@ export default function AdminReports() {
     };
 
     const filteredAgentLogs = useMemo(() => {
-        if (!Array.isArray(agentLogReport?.recentLogs)) return [];
-        return agentLogReport.recentLogs.filter((log) => {
+        if (!Array.isArray(agentLogs)) return [];
+        const start = agentLogStartAt ? new Date(agentLogStartAt) : null;
+        const end = agentLogEndAt ? new Date(agentLogEndAt) : null;
+
+        return agentLogs.filter((log) => {
             const levelMatch = agentLogLevelFilter === 'ALL' || String(log.level).toUpperCase() === agentLogLevelFilter;
             const agentMatch = agentLogAgentFilter === 'ALL' || String(log.agentId) === agentLogAgentFilter;
             const eventMatch = agentLogEventFilter === 'ALL' || String(log.eventType) === agentLogEventFilter;
-            return levelMatch && agentMatch && eventMatch;
+            const requestTypeMatch = agentLogRequestTypeFilter === 'ALL' || String(log.requestType || '').trim().toUpperCase() === agentLogRequestTypeFilter;
+
+            let dateMatch = true;
+            if (start || end) {
+                const logDate = log.createdAt ? new Date(log.createdAt) : null;
+                if (!logDate || Number.isNaN(logDate.getTime())) {
+                    dateMatch = false;
+                } else {
+                    if (start && logDate < start) {
+                        dateMatch = false;
+                    }
+                    if (end && logDate > end) {
+                        dateMatch = false;
+                    }
+                }
+            }
+
+            return levelMatch && agentMatch && eventMatch && requestTypeMatch && dateMatch;
         });
-    }, [agentLogReport, agentLogLevelFilter, agentLogAgentFilter, agentLogEventFilter]);
+    }, [agentLogs, agentLogLevelFilter, agentLogAgentFilter, agentLogEventFilter, agentLogRequestTypeFilter, agentLogStartAt, agentLogEndAt]);
+
+    const agentLogRequestTypeOptions = useMemo(() => {
+        const types = Array.from(new Set((agentLogs || [])
+            .map((log) => String(log.requestType || '').trim())
+            .filter(Boolean)))
+            .sort((left, right) => left.localeCompare(right));
+
+        return [
+            { value: 'ALL', label: 'All request types' },
+            ...types.map((type) => ({ value: type.toUpperCase(), label: type })),
+        ];
+    }, [agentLogs]);
+
+    const paginatedAgentLogs = useMemo(() => {
+        const startIndex = (agentLogPage - 1) * agentLogPageSize;
+        return filteredAgentLogs.slice(startIndex, startIndex + agentLogPageSize);
+    }, [agentLogPage, agentLogPageSize, filteredAgentLogs]);
+
+    const agentLogTotalPages = Math.max(1, Math.ceil(filteredAgentLogs.length / agentLogPageSize));
+
+    useEffect(() => {
+        setAgentLogPage(1);
+    }, [agentLogLevelFilter, agentLogAgentFilter, agentLogEventFilter, agentLogRequestTypeFilter, agentLogStartAt, agentLogEndAt, agentLogRangePreset, agentLogPageSize]);
 
 
 
@@ -565,6 +723,14 @@ export default function AdminReports() {
                             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                             {refreshing ? 'Refreshing...' : 'Refresh'}
                         </button>
+                        <div className="min-w-[180px]">
+                            <ListboxSelect
+                                value={exportScope}
+                                onChange={setExportScope}
+                                options={EXPORT_SCOPE_OPTIONS}
+                                leftIcon={<FileText className="h-4 w-4" />}
+                            />
+                        </div>
                         <button className="btn btn-primary inline-flex items-center gap-2" type="button" onClick={downloadCsv}>
                             <Download className="h-4 w-4" /> Export CSV
                         </button>
@@ -738,7 +904,7 @@ export default function AdminReports() {
                     />
                 </div>
 
-                <div className="grid gap-3 lg:grid-cols-4 mb-4">
+                <div className="grid gap-3 lg:grid-cols-5 mb-4">
                     <div className="lg:col-span-2 relative">
                         <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                         <input
@@ -749,6 +915,12 @@ export default function AdminReports() {
                             className="input-field pl-10"
                         />
                     </div>
+                    <ListboxSelect
+                        value={requestTypeFilter}
+                        onChange={setRequestTypeFilter}
+                        options={REQUEST_TYPE_OPTIONS}
+                        leftIcon={<Filter className="h-4 w-4" />}
+                    />
                     <ListboxSelect
                         value={statusFilter}
                         onChange={setStatusFilter}
@@ -766,57 +938,48 @@ export default function AdminReports() {
                     />
                 </div>
 
-                <h2 className="text-lg font-bold text-slate-900 mt-6 mb-4">Illegal Dump Reports ({sortedReports.length})</h2>
+                <h2 className="text-lg font-bold text-slate-900 mt-6 mb-4">All Requests ({sortedReports.length})</h2>
                 <div className="card overflow-hidden mb-8">
                     <div className="overflow-x-auto no-scrollbar">
                         <table className="w-full text-left text-sm text-slate-600">
                             <thead className="bg-slate-50 text-slate-900 font-medium border-b border-slate-100">
                                 <tr>
+                                    <th className="px-6 py-4">Type</th>
                                     <th className="px-6 py-4">Image</th>
                                     <th className="px-6 py-4">{renderColumnHeader('Location', 'address')}</th>
                                     <th className="px-6 py-4">{renderColumnHeader('Description', 'description')}</th>
                                     <th className="px-6 py-4">{renderColumnHeader('Status', 'status')}</th>
-                                    <th className="px-6 py-4">{renderColumnHeader('Date', 'reportedAt')}</th>
-                                    <th className="px-6 py-4">Picker</th>
-                                    <th className="px-6 py-4">Update</th>
+                                    <th className="px-6 py-4">{renderColumnHeader('Date', 'dateField')}</th>
+                                    <th className="px-6 py-4">Assigned To</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {paginatedReports.map((report) => (
-                                    <tr key={report.id} className="hover:bg-slate-50 transition-colors">
+                                {paginatedReports.map((item) => (
+                                    <tr key={`${item.requestType}-${item.id}`} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-6 py-4">
-                                            {report.imageUrl ? (
-                                                <img src={report.imageUrl} alt="Report" className="h-10 w-10 object-cover rounded border border-slate-200" />
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${item.requestType === 'PICKUP' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                {item.requestType === 'PICKUP' ? 'Pickup' : 'Dump'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {item.imageUrl ? (
+                                                <img src={item.imageUrl} alt="Request" className="h-10 w-10 object-cover rounded border border-slate-200" />
                                             ) : (
                                                 <span className="text-slate-400 text-xs">No image</span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-4 max-w-xs truncate" title={report.address}>{report.address || 'N/A'}</td>
-                                        <td className="px-6 py-4 max-w-xs truncate" title={report.description}>{report.description || 'N/A'}</td>
+                                        <td className="px-6 py-4 max-w-xs truncate" title={item.address}>{item.address || 'N/A'}</td>
+                                        <td className="px-6 py-4 max-w-xs truncate" title={item.description || item.category}>{item.description || item.category || 'N/A'}</td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusBadgeClass(report.status)}`}>
-                                                {report.status || 'UNKNOWN'}
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusBadgeClass(item.status)}`}>
+                                                {item.status || 'UNKNOWN'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4">{report.reportedAt ? new Date(report.reportedAt).toLocaleDateString() : 'N/A'}</td>
+                                        <td className="px-6 py-4">{item.dateField ? new Date(item.dateField).toLocaleDateString() : 'N/A'}</td>
                                         <td className="px-6 py-4 max-w-xs">
-                                            {report.status === 'ASSIGNED' ? (
-                                                <span className="text-sm text-slate-600">{report.pickerName || 'N/A'}</span>
-                                            ) : (
-                                                <ComboboxSelect
-                                                    value={assignPickerIdMap[report.id] || ''}
-                                                    onChange={(pickerId) => setAssignPickerIdMap((prev) => ({ ...prev, [report.id]: pickerId }))}
-                                                    options={pickerOptions}
-                                                    placeholder="Search picker"
-                                                />
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 w-52">
-                                            <ListboxSelect
-                                                value={report.status}
-                                                onChange={(newStatus) => updateReportStatus(report.id, newStatus)}
-                                                options={STATUS_OPTIONS}
-                                            />
+                                            <span className="text-sm text-slate-600">
+                                                {item.status === 'ASSIGNED' ? (item.pickerName || 'N/A') : 'Not Assigned'}
+                                            </span>
                                         </td>
                                     </tr>
                                 ))}
@@ -824,7 +987,7 @@ export default function AdminReports() {
                                 {paginatedReports.length === 0 && (
                                     <tr>
                                         <td className="px-6 py-8 text-center text-slate-500" colSpan={7}>
-                                            No dumps match your filters.
+                                            No requests match your filters.
                                         </td>
                                     </tr>
                                 )}
@@ -841,7 +1004,7 @@ export default function AdminReports() {
                     onPageSizeChange={setPageSize}
                 />
 
-                <h2 className="text-lg font-bold text-slate-900 mt-10 mb-4">Agent Logs Report (Last 24 Hours)</h2>
+                <h2 className="text-lg font-bold text-slate-900 mt-10 mb-4">Agent Logs Report</h2>
                 <div className="grid md:grid-cols-3 gap-4 mb-5">
                     <div className="card p-4">
                         <p className="text-xs text-slate-500 uppercase tracking-wide">Total Logs</p>
@@ -854,6 +1017,63 @@ export default function AdminReports() {
                     <div className="card p-4">
                         <p className="text-xs text-slate-500 uppercase tracking-wide">Warning Logs</p>
                         <p className="text-2xl font-bold text-amber-700 mt-1">{agentLogReport?.warningLogs ?? 0}</p>
+                    </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-5 mb-3 items-end">
+                    <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Range</label>
+                        <ListboxSelect
+                            value={agentLogRangePreset}
+                            onChange={setAgentLogRangePreset}
+                            options={[
+                                { value: '24H', label: 'Last 24 hours' },
+                                { value: '7D', label: 'Last 7 days' },
+                                { value: '30D', label: 'Last 30 days' },
+                                { value: 'ALL', label: 'All (max available)' },
+                            ]}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">From</label>
+                        <input
+                            type="datetime-local"
+                            className="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+                            value={agentLogStartAt}
+                            onChange={(event) => setAgentLogStartAt(event.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">To</label>
+                        <input
+                            type="datetime-local"
+                            className="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition"
+                            value={agentLogEndAt}
+                            onChange={(event) => setAgentLogEndAt(event.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Request Type</label>
+                        <ListboxSelect
+                            value={agentLogRequestTypeFilter}
+                            onChange={setAgentLogRequestTypeFilter}
+                            options={agentLogRequestTypeOptions}
+                        />
+                    </div>
+                    <div>
+                        <button
+                            className="btn btn-secondary inline-flex items-center gap-2 h-11 w-full justify-center"
+                            type="button"
+                            onClick={() => {
+                                const end = new Date();
+                                const start = new Date(end.getTime() - (24 * 60 * 60 * 1000));
+                                setAgentLogRangePreset('24H');
+                                setAgentLogStartAt(getDateTimeLocalValue(start));
+                                setAgentLogEndAt(getDateTimeLocalValue(end));
+                            }}
+                        >
+                            Set 24h
+                        </button>
                     </div>
                 </div>
 
@@ -875,18 +1095,59 @@ export default function AdminReports() {
                             value={agentLogAgentFilter}
                             onChange={setAgentLogAgentFilter}
                             options={[{ value: 'ALL', label: 'All agents' },
-                                ...Array.from(new Set((agentLogReport?.recentLogs || []).map(l => l.agentId))).filter(Boolean).map(agentId => ({ value: agentId, label: agentId }))]} />
+                                ...Array.from(new Set((agentLogs || []).map(l => l.agentId))).filter(Boolean).map(agentId => ({ value: agentId, label: agentId }))]} />
                     </div>
                     <div className="flex-1 min-w-[160px]">
                         <ListboxSelect
                             value={agentLogEventFilter}
                             onChange={setAgentLogEventFilter}
                             options={[{ value: 'ALL', label: 'All events' },
-                                ...Array.from(new Set((agentLogReport?.recentLogs || []).map(l => l.eventType))).filter(Boolean).map(eventType => ({ value: eventType, label: eventType }))]} />
+                                ...Array.from(new Set((agentLogs || []).map(l => l.eventType))).filter(Boolean).map(eventType => ({ value: eventType, label: eventType }))]} />
                     </div>
                     <button className="btn btn-primary inline-flex items-center gap-2 h-12" type="button" onClick={downloadAgentLogsCsv}>
                         <Download className="h-4 w-4" /> Export Agent Logs CSV
                     </button>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
+                    <div className="text-xs text-slate-500">
+                        Showing {Math.min(filteredAgentLogs.length, (agentLogPage - 1) * agentLogPageSize + 1)}-{Math.min(filteredAgentLogs.length, agentLogPage * agentLogPageSize)} of {filteredAgentLogs.length} logs
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className="min-w-[140px]">
+                            <ListboxSelect
+                                value={String(agentLogPageSize)}
+                                onChange={(value) => setAgentLogPageSize(Number(value))}
+                                options={[
+                                    { value: '10', label: '10 / page' },
+                                    { value: '20', label: '20 / page' },
+                                    { value: '50', label: '50 / page' },
+                                    { value: '100', label: '100 / page' },
+                                ]}
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-50"
+                                onClick={() => setAgentLogPage((prev) => Math.max(1, prev - 1))}
+                                disabled={agentLogPage <= 1}
+                            >
+                                Prev
+                            </button>
+                            <span className="text-sm text-slate-600">
+                                {agentLogPage} / {agentLogTotalPages}
+                            </span>
+                            <button
+                                type="button"
+                                className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-50"
+                                onClick={() => setAgentLogPage((prev) => Math.min(agentLogTotalPages, prev + 1))}
+                                disabled={agentLogPage >= agentLogTotalPages}
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="card overflow-hidden mb-8">
@@ -903,7 +1164,7 @@ export default function AdminReports() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {filteredAgentLogs.map((log) => (
+                                {paginatedAgentLogs.map((log) => (
                                     <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {log.createdAt ? new Date(log.createdAt).toLocaleString() : 'N/A'}

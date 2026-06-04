@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { PieChart } from 'lucide-react';
 
-const DEFAULT_COLORS = ['#16a34a', '#f59e0b', '#0ea5e9', '#6366f1', '#ef4444', '#14b8a6', '#8b5cf6'];
+const DEFAULT_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899'];
 
 function normalizeData(data) {
     return (Array.isArray(data) ? data : [])
@@ -18,6 +19,8 @@ export default function AdminDonutChart({
     data,
     totalLabel = 'Total',
 }) {
+    const [hoveredItem, setHoveredItem] = useState(null);
+
     const chartData = useMemo(() => normalizeData(data), [data]);
 
     const total = useMemo(() => {
@@ -42,40 +45,66 @@ export default function AdminDonutChart({
     }, [chartData, total]);
 
     return (
-        <div className="card p-5 border border-slate-200">
-            <div className="mb-4">
-                <h3 className="text-base font-bold text-slate-900">{title}</h3>
-                {subtitle ? <p className="text-xs text-slate-500 mt-1">{subtitle}</p> : null}
+        <div className="card p-6 border border-slate-200 bg-gradient-to-br from-slate-50/50 to-white shadow-sm hover:shadow-md transition-shadow h-full flex flex-col">
+            <div className="mb-5">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <PieChart className="h-5 w-5 text-blue-500" />
+                    {title}
+                </h3>
+                {subtitle ? <p className="text-sm text-slate-600 mt-2">{subtitle}</p> : null}
             </div>
 
             {chartData.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500 flex-1 flex items-center justify-center">
                     No data available for current filters.
                 </div>
             ) : (
-                <div className="grid gap-4 sm:grid-cols-[160px,1fr] sm:items-center">
-                    <div className="relative mx-auto h-36 w-36 rounded-full" style={{ background: gradient }}>
-                        <div className="absolute inset-4 rounded-full bg-white border border-slate-100 flex flex-col items-center justify-center text-center">
-                            <span className="text-[11px] uppercase tracking-wide text-slate-500">{totalLabel}</span>
-                            <span className="text-xl font-bold text-slate-900">{total}</span>
+                <div className="grid gap-6 sm:grid-cols-[200px,1fr] sm:items-center flex-1">
+                    <div className="relative mx-auto h-48 w-48 rounded-full shadow-lg hover:shadow-xl transition-shadow" style={{ background: gradient }}>
+                        <div className="absolute inset-6 rounded-full bg-white border-4 border-slate-100 flex flex-col items-center justify-center text-center shadow-inner">
+                            <span className="text-[10px] uppercase tracking-widest font-bold text-slate-600">{totalLabel}</span>
+                            <span className="text-3xl font-bold text-slate-900 mt-1">{total}</span>
                         </div>
                     </div>
 
-                    <ul className="space-y-2">
-                        {chartData.map((item) => {
+                    <div className="flex-1 space-y-2.5">
+                        {chartData.map((item, idx) => {
                             const percent = total ? Math.round((item.value / total) * 100) : 0;
+                            const isHovered = hoveredItem === idx;
 
                             return (
-                                <li key={item.label} className="flex items-center justify-between gap-2 text-sm">
-                                    <span className="inline-flex items-center gap-2 text-slate-700">
-                                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }}></span>
-                                        {item.label}
-                                    </span>
-                                    <span className="font-semibold text-slate-900">{item.value} ({percent}%)</span>
-                                </li>
+                                <div
+                                    key={item.label}
+                                    className="group cursor-pointer"
+                                    onMouseEnter={() => setHoveredItem(idx)}
+                                    onMouseLeave={() => setHoveredItem(null)}
+                                >
+                                    <div className={`flex items-center justify-between gap-3 p-3 rounded-lg transition-all ${isHovered ? 'bg-slate-100' : 'hover:bg-slate-50'}`}>
+                                        <span className="inline-flex items-center gap-3 flex-1 min-w-0">
+                                            <span
+                                                className={`h-3.5 w-3.5 rounded-full flex-shrink-0 shadow-md transition-all ${isHovered ? 'scale-125 shadow-lg' : ''}`}
+                                                style={{
+                                                    backgroundColor: item.color,
+                                                    boxShadow: isHovered ? `0 0 16px ${item.color}60` : `0 2px 8px ${item.color}30`,
+                                                }}
+                                            ></span>
+                                            <span className={`text-sm font-semibold truncate transition-colors ${isHovered ? 'text-slate-900' : 'text-slate-700'}`}>
+                                                {item.label}
+                                            </span>
+                                        </span>
+                                        <div className="flex items-center gap-3 flex-shrink-0">
+                                            <span className={`text-sm font-bold transition-colors ${isHovered ? 'text-slate-900' : 'text-slate-600'}`}>
+                                                {item.value}
+                                            </span>
+                                            <span className={`text-xs font-bold bg-slate-100 px-2.5 py-1 rounded-full transition-all ${isHovered ? 'bg-slate-200 text-slate-900' : 'text-slate-700'}`}>
+                                                {percent}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
                             );
                         })}
-                    </ul>
+                    </div>
                 </div>
             )}
         </div>
