@@ -59,6 +59,7 @@ export default function AdminReports() {
     const [assignPickerIdMap, setAssignPickerIdMap] = useState({});
     const [agentLogReport, setAgentLogReport] = useState(null);
     const [agentLogs, setAgentLogs] = useState([]);
+    const [agentLogLoading, setAgentLogLoading] = useState(false);
     const [agentLogLevelFilter, setAgentLogLevelFilter] = useState('ALL');
     const [agentLogAgentFilter, setAgentLogAgentFilter] = useState('ALL');
     const [agentLogEventFilter, setAgentLogEventFilter] = useState('ALL');
@@ -69,7 +70,7 @@ export default function AdminReports() {
     const [agentLogPage, setAgentLogPage] = useState(1);
     const [agentLogPageSize, setAgentLogPageSize] = useState(10);
 
-    const fetchAgentLogs = useCallback(async () => {
+    const fetchAgentLogs = useCallback(async (showLoading = false) => {
         const presetHours = {
             '24H': 24,
             '7D': 24 * 7,
@@ -79,6 +80,10 @@ export default function AdminReports() {
 
         const hours = presetHours[agentLogRangePreset] || 24;
         const limit = agentLogRangePreset === 'ALL' ? 200 : 200;
+
+        if (showLoading) {
+            setAgentLogLoading(true);
+        }
 
         try {
             const { data: logReportData } = await api.get('/auth/agent-logs/report', {
@@ -92,6 +97,10 @@ export default function AdminReports() {
         } catch {
             setAgentLogReport(null);
             setAgentLogs([]);
+        } finally {
+            if (showLoading) {
+                setAgentLogLoading(false);
+            }
         }
     }, [agentLogRangePreset]);
 
@@ -134,7 +143,7 @@ export default function AdminReports() {
                 console.warn(`  WARNING: ${invalidReports.length} reports have missing IDs`);
             }
 
-            await fetchAgentLogs();
+            await fetchAgentLogs(true);
         } catch (error) {
             addToast(getApiErrorMessage(error, 'Error fetching report data'), 'error');
             setPickups([]);
@@ -154,7 +163,7 @@ export default function AdminReports() {
 
     useEffect(() => {
         if (!loading) {
-            fetchAgentLogs();
+            fetchAgentLogs(false); // Don't show loading when range preset changes
         }
     }, [agentLogRangePreset, fetchAgentLogs, loading]);
 
@@ -648,8 +657,6 @@ export default function AdminReports() {
 
     const filteredAgentLogs = useMemo(() => {
         if (!Array.isArray(agentLogs)) return [];
-        const start = agentLogStartAt ? new Date(agentLogStartAt) : null;
-        const end = agentLogEndAt ? new Date(agentLogEndAt) : null;
 
         return agentLogs.filter((log) => {
             const levelMatch = agentLogLevelFilter === 'ALL' || String(log.level).toUpperCase() === agentLogLevelFilter;
@@ -657,24 +664,9 @@ export default function AdminReports() {
             const eventMatch = agentLogEventFilter === 'ALL' || String(log.eventType) === agentLogEventFilter;
             const requestTypeMatch = agentLogRequestTypeFilter === 'ALL' || String(log.requestType || '').trim().toUpperCase() === agentLogRequestTypeFilter;
 
-            let dateMatch = true;
-            if (start || end) {
-                const logDate = log.createdAt ? new Date(log.createdAt) : null;
-                if (!logDate || Number.isNaN(logDate.getTime())) {
-                    dateMatch = false;
-                } else {
-                    if (start && logDate < start) {
-                        dateMatch = false;
-                    }
-                    if (end && logDate > end) {
-                        dateMatch = false;
-                    }
-                }
-            }
-
-            return levelMatch && agentMatch && eventMatch && requestTypeMatch && dateMatch;
+            return levelMatch && agentMatch && eventMatch && requestTypeMatch;
         });
-    }, [agentLogs, agentLogLevelFilter, agentLogAgentFilter, agentLogEventFilter, agentLogRequestTypeFilter, agentLogStartAt, agentLogEndAt]);
+    }, [agentLogs, agentLogLevelFilter, agentLogAgentFilter, agentLogEventFilter, agentLogRequestTypeFilter]);
 
     const agentLogRequestTypeOptions = useMemo(() => {
         const types = Array.from(new Set((agentLogs || [])
@@ -696,8 +688,11 @@ export default function AdminReports() {
     const agentLogTotalPages = Math.max(1, Math.ceil(filteredAgentLogs.length / agentLogPageSize));
 
     useEffect(() => {
-        setAgentLogPage(1);
-    }, [agentLogLevelFilter, agentLogAgentFilter, agentLogEventFilter, agentLogRequestTypeFilter, agentLogStartAt, agentLogEndAt, agentLogRangePreset, agentLogPageSize]);
+        // Only reset page if we're beyond the available pages
+        if (agentLogPage > agentLogTotalPages && agentLogTotalPages > 0) {
+            setAgentLogPage(1);
+        }
+    }, [agentLogLevelFilter, agentLogAgentFilter, agentLogEventFilter, agentLogRequestTypeFilter, agentLogRangePreset, agentLogPageSize, agentLogPage, agentLogTotalPages]);
 
 
 
@@ -1004,7 +999,12 @@ export default function AdminReports() {
                     onPageSizeChange={setPageSize}
                 />
 
-                <h2 className="text-lg font-bold text-slate-900 mt-10 mb-4">Agent Logs Report</h2>
+                <h2 className="text-lg font-bold text-slate-900 mt-10 mb-4 flex items-center gap-2">
+                    Agent Logs Report
+                    {agentLogLoading && (
+                        <RefreshCw className="h-4 w-4 animate-spin text-primary-600" />
+                    )}
+                </h2>
                 <div className="grid md:grid-cols-3 gap-4 mb-5">
                     <div className="card p-4">
                         <p className="text-xs text-slate-500 uppercase tracking-wide">Total Logs</p>
@@ -1150,7 +1150,7 @@ export default function AdminReports() {
                     </div>
                 </div>
 
-                <div className="card overflow-hidden mb-8">
+                <div className={`card overflow-hidden mb-8 transition-opacity duration-200 ${agentLogLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                     <div className="overflow-x-auto no-scrollbar">
                         <table className="w-full text-left text-sm text-slate-600">
                             <thead className="bg-slate-50 text-slate-900 font-medium border-b border-slate-100">

@@ -46,14 +46,17 @@ export default function ListboxSelect({
 
     function ScrollLock({ active }) {
         useEffect(() => {
-            if (active) {
-                document.documentElement.style.overflow = 'hidden';
-            } else {
-                document.documentElement.style.overflow = '';
-            }
+            if (!active) return;
+            
+            // Only lock scroll on mobile devices
+            const isMobile = window.innerWidth < 768;
+            if (!isMobile) return;
+            
+            const originalOverflow = document.documentElement.style.overflow;
+            document.documentElement.style.overflow = 'hidden';
 
             return () => {
-                document.documentElement.style.overflow = '';
+                document.documentElement.style.overflow = originalOverflow;
             };
         }, [active]);
 

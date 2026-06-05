@@ -200,26 +200,26 @@ export default function AdminTrendChart({
                             </text>
 
                             {/* Area fills */}
-                            {visibleSeries.first && (
+                            {visibleSeries.first && firstPath && (
                                 <path
-                                    d={`${firstPath} L ${firstPoints[firstPoints.length - 1]?.x || padding} ${chartHeight - padding} Z`}
+                                    d={`${firstPath} L ${firstPoints[firstPoints.length - 1]?.x || padding} ${chartHeight - padding} L ${firstPoints[0]?.x || padding} ${chartHeight - padding} Z`}
                                     fill="url(#firstGradient)"
                                     opacity="0.5"
                                 />
                             )}
-                            {visibleSeries.second && (
+                            {visibleSeries.second && secondPath && (
                                 <path
-                                    d={`${secondPath} L ${secondPoints[secondPoints.length - 1]?.x || padding} ${chartHeight - padding} Z`}
+                                    d={`${secondPath} L ${secondPoints[secondPoints.length - 1]?.x || padding} ${chartHeight - padding} L ${secondPoints[0]?.x || padding} ${chartHeight - padding} Z`}
                                     fill="url(#secondGradient)"
                                     opacity="0.5"
                                 />
                             )}
 
                             {/* Lines */}
-                            {visibleSeries.first && (
+                            {visibleSeries.first && firstPath && (
                                 <path d={firstPath} stroke="#3b82f6" strokeWidth="2.5" fill="none" vectorEffect="non-scaling-stroke" />
                             )}
-                            {visibleSeries.second && (
+                            {visibleSeries.second && secondPath && (
                                 <path d={secondPath} stroke="#f59e0b" strokeWidth="2.5" fill="none" vectorEffect="non-scaling-stroke" />
                             )}
 
